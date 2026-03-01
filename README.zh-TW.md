@@ -173,8 +173,9 @@ claude-sync/
 ├── .claude-plugin/
 │   └── plugin.json              # 插件 metadata（名稱、版本、作者）
 ├── hooks/
-│   ├── hooks.json               # Hook 註冊（SessionStart）
-│   └── session-start-check.js   # 輕量更新檢查器（~38 行）
+│   ├── hooks.json               # Hook 註冊（SessionStart + SessionEnd）
+│   ├── session-start-check.js   # 輕量更新檢查器（~38 行）
+│   └── session-end-check.js     # Session 結束時自動推送或提醒
 ├── commands/
 │   ├── sync-init.md             # /sync-init
 │   ├── sync-push.md             # /sync-push
@@ -198,6 +199,7 @@ claude-sync/
 │   ├── installed_plugins.json   # 插件清單，路徑使用 ${CLAUDE_HOME}
 │   └── known_marketplaces.json  # Marketplace 清單，路徑使用 ${CLAUDE_HOME}
 └── user-config/
+    ├── CLAUDE.md                # 你的全域 CLAUDE.md 記憶檔
     ├── commands/                # 你的全域自訂 slash commands
     ├── rules/                   # 你的全域 rules
     └── agents/                  # 你的自訂 agent 定義
@@ -215,6 +217,7 @@ claude-sync/
 ~/.claude/sync-backups/          # 每次 pull 前的自動備份（最多 5 份）
 └── backup-2026-03-01T12-00-00-000Z/
     ├── settings.json
+    ├── CLAUDE.md
     ├── installed_plugins.json
     ├── known_marketplaces.json
     ├── commands/
@@ -226,13 +229,11 @@ claude-sync/
 
 ## 🔔 Hooks
 
-本插件註冊了一個 **SessionStart** hook。
+本插件註冊了兩個 hook：**SessionStart** 和 **SessionEnd**。
 
-### 什麼是 SessionStart？
+### SessionStart — 遠端更新檢查
 
 Claude Code 在每次對話工作階段開始時觸發 `SessionStart` — 包括開始新 session、恢復既有 session、執行 `/clear` 或 context compaction 之後。它在你的**第一個 prompt 被處理之前**執行。
-
-### Hook 的行為
 
 `hooks/session-start-check.js` 在每次工作階段開始時自動執行：
 
@@ -251,6 +252,24 @@ Claude Code 在每次對話工作階段開始時觸發 `SessionStart` — 包括
 
 > **核心原則：** hook 是**唯讀且被動的**。它永遠不會修改你的本地設定。只會通知。由你決定何時 pull。
 
+### SessionEnd — 自動推送或提醒
+
+Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回應都觸發）。
+
+`hooks/session-end-check.js` 在工作階段結束時自動執行：
+
+1. 🔍 檢查 sync 是否已初始化。如果沒有，靜默退出。
+
+2. 📝 匯出目前的設定並檢查本地變更。如果沒有變更，靜默退出。
+
+3. 🔀 讀取 `config.autoPush`：
+   - **`autoPush: true`** — 自動 commit 並推送變更到遠端。輸出：`[claude-sync] ✅ 已自動推送變更到遠端。`
+   - **`autoPush: false`**（預設） — 只顯示提醒：`[claude-sync] 📌 本地有未推送的變更。執行 /sync-push 來同步。`
+
+4. 🛡️ 遇到**任何**錯誤，靜默退出，回傳碼為 0。使用 10 秒 timeout（比 SessionStart 的 5 秒長，因為 push 需要網路）。
+
+> **啟用自動推送：** 在 `~/.claude/sync/config.json` 中設定 `autoPush: true`，或在 `/sync-init` 時啟用。
+
 ### 工作階段生命週期
 
 ```
@@ -266,6 +285,8 @@ Claude Code 在每次對話工作階段開始時觸發 `SessionStart` — 包括
   ├─ 🔄 使用者輸入 /sync-push 或 /sync-pull（手動、按需觸發）
   │
   └─ 工作階段結束
+        └─ 🔔 SessionEnd hooks 觸發
+              └─ claude-sync 自動推送（若 autoPush）或提醒
 ```
 
 ---
@@ -282,6 +303,7 @@ Claude Code 在每次對話工作階段開始時觸發 `SessionStart` — 包括
 | `~/.claude/commands/` | `user-config/commands/` | 鏡像同步（新增、更新、刪除） |
 | `~/.claude/rules/` | `user-config/rules/` | 鏡像同步 |
 | `~/.claude/agents/` | `user-config/agents/` | 鏡像同步 |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製 |
 
 ### ❌ 不會同步的內容
 

@@ -38,6 +38,25 @@ Help the user initialize claude-sync. Follow these steps:
    - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
    - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
-6. **Chezmoi check.** If `chezmoi managed 2>/dev/null | grep -q .claude`, warn about potential conflicts.
+6. **Ask about auto-push.** Ask the user:
+
+   > 是否啟用自動推送（autoPush）？啟用後，每次 session 結束時會自動推送你的設定變更到遠端。
+
+   - If yes: set `autoPush: true` in config:
+     ```bash
+     node -e "
+       const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+       const c = s.loadConfig();
+       c.autoPush = true;
+       s.saveConfig(c);
+       console.log('autoPush enabled');
+     "
+     ```
+   - If no: leave it as default (`autoPush: false`). Tell the user they can enable it later by running:
+     ```
+     node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); const c = s.loadConfig(); c.autoPush = true; s.saveConfig(c);"
+     ```
+
+7. **Chezmoi check.** If `chezmoi managed 2>/dev/null | grep -q .claude`, warn about potential conflicts.
 
 IMPORTANT: Replace `REMOTE_URL_HERE` with the actual URL before running.

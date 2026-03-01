@@ -100,7 +100,7 @@ After initialization, the following files are created:
 
 | File | Purpose |
 |------|---------|
-| `~/.claude/sync/config.json` | Stores the remote repo URL and sync preferences |
+| `~/.claude/sync/config.json` | Stores the remote repo URL and sync preferences (`autoPush`, `autoPull`) |
 | `~/.claude/sync/last-sync.json` | Timestamp and type of last sync operation |
 | `~/.claude/sync/repo/` | Local git clone of the sync repo |
 
@@ -179,14 +179,26 @@ Always show the diff to the user before pulling. Each diff entry contains:
    - After marketplaces are restored, run: `claude plugin update` to reinstall all missing plugins
    - This ensures the pull results in a fully working setup, not just config files without actual plugin code
 
-4. **Backup location.** Every pull creates a backup at `~/.claude/sync-backups/`. If something goes wrong, restore with `/sync-restore`.
+4. **CLAUDE.md sync.** The global `~/.claude/CLAUDE.md` file (user's personal memory) is included in sync. It is exported to `repo/user-config/CLAUDE.md` and imported back during pull. Backups also include CLAUDE.md.
 
-5. **Chezmoi coexistence.** If `~/.claude/` is managed by chezmoi, warn the user about potential conflicts:
+5. **Auto-push on session end.** If `config.autoPush` is `true`, the plugin automatically exports and pushes changes when a session ends. If `false` (default), it only shows a reminder. During `/sync-init`, ask the user if they want to enable auto-push. To change later:
+   ```bash
+   node -e "
+     const s = require('PLUGIN_ROOT/lib/sync-engine.js');
+     const c = s.loadConfig();
+     c.autoPush = true;  // or false
+     s.saveConfig(c);
+   "
+   ```
+
+6. **Backup location.** Every pull creates a backup at `~/.claude/sync-backups/`. If something goes wrong, restore with `/sync-restore`.
+
+7. **Chezmoi coexistence.** If `~/.claude/` is managed by chezmoi, warn the user about potential conflicts:
    ```bash
    chezmoi managed 2>/dev/null | grep -q .claude && echo "WARNING: ~/.claude is managed by chezmoi"
    ```
 
-6. **Error handling.** If any sync operation fails, check:
+8. **Error handling.** If any sync operation fails, check:
    - Is git installed? (`which git`)
    - Is the network available? (`git ls-remote origin main` in the sync repo)
    - Is another sync in progress? (lockfile at `~/.claude/sync/.sync.lock` — if stale, remove it)

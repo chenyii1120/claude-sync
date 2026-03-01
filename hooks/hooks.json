@@ -1,5 +1,5 @@
 {
-  "description": "claude-sync SessionStart hook for remote update notification",
+  "description": "claude-sync hooks for session notifications",
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +7,16 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-check.js\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-check.js\""
           }
         ]
       }

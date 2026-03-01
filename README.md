@@ -173,8 +173,9 @@ claude-sync/
 ├── .claude-plugin/
 │   └── plugin.json              # Plugin metadata (name, version, author)
 ├── hooks/
-│   ├── hooks.json               # Hook registration (SessionStart)
-│   └── session-start-check.js   # Lightweight update checker (~38 lines)
+│   ├── hooks.json               # Hook registration (SessionStart + SessionEnd)
+│   ├── session-start-check.js   # Lightweight update checker (~38 lines)
+│   └── session-end-check.js     # Auto-push or reminder on session end
 ├── commands/
 │   ├── sync-init.md             # /sync-init
 │   ├── sync-push.md             # /sync-push
@@ -198,6 +199,7 @@ When you push, your private sync repo looks like this:
 │   ├── installed_plugins.json   # Plugin list with ${CLAUDE_HOME} paths
 │   └── known_marketplaces.json  # Marketplace list with ${CLAUDE_HOME} paths
 └── user-config/
+    ├── CLAUDE.md                # Your global CLAUDE.md memory file
     ├── commands/                # Your global custom slash commands
     ├── rules/                   # Your global rules
     └── agents/                  # Your custom agent definitions
@@ -215,6 +217,7 @@ When you push, your private sync repo looks like this:
 ~/.claude/sync-backups/          # Auto-backups before each pull (max 5)
 └── backup-2026-03-01T12-00-00-000Z/
     ├── settings.json
+    ├── CLAUDE.md
     ├── installed_plugins.json
     ├── known_marketplaces.json
     ├── commands/
@@ -226,13 +229,11 @@ When you push, your private sync repo looks like this:
 
 ## 🔔 Hooks
 
-This plugin registers a single **SessionStart** hook.
+This plugin registers two hooks: **SessionStart** and **SessionEnd**.
 
-### What is SessionStart?
+### SessionStart — Remote update check
 
 Claude Code fires `SessionStart` at the beginning of every conversation session — when you start a new session, resume an existing one, or after `/clear` or context compaction. It runs **before** your first prompt is processed.
-
-### What the hook does
 
 `hooks/session-start-check.js` runs automatically on every session start:
 
@@ -251,6 +252,24 @@ Claude Code fires `SessionStart` at the beginning of every conversation session 
 
 > **Key principle:** The hook is **read-only and passive**. It never modifies your local settings. It only notifies. You decide when to pull.
 
+### SessionEnd — Auto-push or reminder
+
+Claude Code fires `SessionEnd` when a session truly ends (not on every response turn).
+
+`hooks/session-end-check.js` runs automatically on session end:
+
+1. 🔍 Checks if sync is initialized. If not, exits silently.
+
+2. 📝 Exports current settings and checks for local changes. If nothing changed, exits silently.
+
+3. 🔀 Reads `config.autoPush`:
+   - **`autoPush: true`** — Automatically commits and pushes changes to remote. Outputs: `[claude-sync] ✅ 已自動推送變更到遠端。`
+   - **`autoPush: false`** (default) — Only shows a reminder: `[claude-sync] 📌 本地有未推送的變更。執行 /sync-push 來同步。`
+
+4. 🛡️ On **any** error, exits silently with code 0. Uses a 10-second timeout (longer than SessionStart's 5s, since push requires network).
+
+> **To enable auto-push**, set `autoPush: true` in `~/.claude/sync/config.json`, or enable it during `/sync-init`.
+
 ### Session lifecycle
 
 ```
@@ -266,6 +285,8 @@ Session start (new / resume / clear / compact)
   ├─ 🔄 User types /sync-push or /sync-pull (manual, on-demand)
   │
   └─ Session end
+        └─ 🔔 SessionEnd hooks fire
+              └─ claude-sync auto-pushes (if autoPush) or reminds
 ```
 
 ---
@@ -282,6 +303,7 @@ Session start (new / resume / clear / compact)
 | `~/.claude/commands/` | `user-config/commands/` | Mirror sync (adds, updates, and deletes) |
 | `~/.claude/rules/` | `user-config/rules/` | Mirror sync |
 | `~/.claude/agents/` | `user-config/agents/` | Mirror sync |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists |
 
 ### ❌ What Does NOT Get Synced
 
