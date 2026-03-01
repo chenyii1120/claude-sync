@@ -46,7 +46,7 @@ claude plugin install /path/to/claude-sync
 
 | Item | Strategy |
 |------|----------|
-| `settings.json` | Whitelist merge (`language`, `enabledPlugins`) |
+| `settings.json` | Full sync (excludes machine-specific `statusLine`) |
 | `installed_plugins.json` | Full sync with path transformation |
 | `known_marketplaces.json` | Full sync with path transformation |
 | `~/.claude/commands/` | Full directory sync |
@@ -54,7 +54,7 @@ claude plugin install /path/to/claude-sync
 
 ## What Does NOT Get Synced
 
-- Machine-specific settings (`statusLine`, `permissions`)
+- `statusLine` in settings (contains machine-specific absolute paths)
 - Plugin source code (`plugins/cache/`) — reinstall via marketplace
 - Session transcripts, debug logs, conversation history
 

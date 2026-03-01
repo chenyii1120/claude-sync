@@ -46,7 +46,7 @@ claude plugin install /path/to/claude-sync
 
 | 項目 | 策略 |
 |------|------|
-| `settings.json` | 白名單合併（僅 `language`、`enabledPlugins`） |
+| `settings.json` | 完整同步（排除機器專屬的 `statusLine`） |
 | `installed_plugins.json` | 完整同步，路徑自動轉換 |
 | `known_marketplaces.json` | 完整同步，路徑自動轉換 |
 | `~/.claude/commands/` | 完整目錄同步 |
@@ -54,7 +54,7 @@ claude plugin install /path/to/claude-sync
 
 ## 不會同步的內容
 
-- 機器專屬設定（`statusLine`、`permissions`）
+- `statusLine` 設定（包含機器專屬的絕對路徑）
 - 插件原始碼（`plugins/cache/`）— 透過 marketplace 重新安裝即可
 - 對話記錄、除錯日誌、歷史紀錄
 
