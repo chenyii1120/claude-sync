@@ -75,6 +75,14 @@ claude plugin install /path/to/claude-sync
 - **SessionStart hook** — passively checks for remote updates on session start
 - **Last-write-wins** — simple conflict strategy with git history as safety net
 
+## Disclaimer
+
+- This is a **community plugin**, not an official Anthropic product. It is not affiliated with, endorsed by, or supported by Anthropic.
+- This plugin reads and writes files under `~/.claude/`. While it includes backup mechanisms, **use at your own risk**. Always verify changes with `/sync-diff` before pulling.
+- Your `settings.json` may contain sensitive data (e.g., environment variables with API keys or tokens). This plugin pushes them to a git remote. **Use a private repository** and review what gets synced.
+- Conflict resolution uses a simple last-write-wins strategy. In rare cases, settings from one machine may overwrite changes made on another. Git history is preserved as a safety net.
+- If Anthropic introduces native settings sync in the future, this plugin may become redundant.
+
 ## License
 
 MIT

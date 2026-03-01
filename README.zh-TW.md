@@ -75,6 +75,14 @@ claude plugin install /path/to/claude-sync
 - **SessionStart hook** — 啟動時被動檢查遠端是否有更新
 - **Last-write-wins** — 簡單的衝突策略，git 歷史紀錄作為安全網
 
+## 免責聲明
+
+- 這是一個**社群插件**，並非 Anthropic 官方產品，與 Anthropic 沒有任何關聯、背書或支援關係。
+- 本插件會讀寫 `~/.claude/` 底下的檔案。雖然內建備份機制，但**使用風險自負**。拉取前請先用 `/sync-diff` 確認變更內容。
+- 你的 `settings.json` 可能包含敏感資料（例如帶有 API key 或 token 的環境變數）。本插件會將這些資料推送到 git remote。**請務必使用私有 repo**，並檢查同步的內容。
+- 衝突解決採用簡單的 last-write-wins 策略。在少數情況下，某台機器的設定可能會覆蓋另一台的變更。Git 歷史紀錄會保留作為安全網。
+- 若 Anthropic 未來推出原生的設定同步功能，本插件可能不再需要。
+
 ## 授權條款
 
 MIT
