@@ -1,0 +1,12 @@
+{
+  "name": "claude-sync",
+  "description": "Sync your Claude Code settings, plugins, and commands across machines using any git remote",
+  "version": "0.1.0",
+  "author": {
+    "name": "chenyii1120",
+    "email": "chenyii1120@gmail.com"
+  },
+  "repository": "https://github.com/chenyii1120/claude-sync",
+  "license": "MIT",
+  "keywords": ["sync", "settings", "plugins", "multi-machine", "dotfiles"]
+}
