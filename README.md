@@ -9,10 +9,13 @@ No extra dependencies. No server. Just one private git repo.
 ## Install
 
 ```bash
-# From marketplace
+# 1. Add the marketplace
+claude plugin marketplace add github:chenyii1120/claude-sync
+
+# 2. Install the plugin
 claude plugin install claude-sync
 
-# From source (for development)
+# Or install directly from source (for development)
 claude plugin install /path/to/claude-sync
 ```
 

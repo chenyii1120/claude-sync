@@ -9,10 +9,13 @@
 ## 安裝
 
 ```bash
-# 從 marketplace 安裝
+# 1. 添加 marketplace
+claude plugin marketplace add github:chenyii1120/claude-sync
+
+# 2. 安裝插件
 claude plugin install claude-sync
 
-# 從原始碼安裝（開發用）
+# 或從原始碼直接安裝（開發用）
 claude plugin install /path/to/claude-sync
 ```
 
