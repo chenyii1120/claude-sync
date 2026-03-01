@@ -35,9 +35,8 @@ Help the user initialize claude-sync. Follow these steps:
    ```
 
 5. **Report results.** Tell the user:
-   - If the repo was empty: "Settings exported and pushed."
-   - If the repo had data: "Connected to existing sync repo. Run `/sync-pull` to import settings."
-   - Remind: "Run `/sync-push` after changing settings. Run `/sync-pull` on other machines."
+   - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
+   - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
 6. **Chezmoi check.** If `chezmoi managed 2>/dev/null | grep -q .claude`, warn about potential conflicts.
 
