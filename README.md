@@ -288,6 +288,10 @@ All git history is preserved. If something goes wrong, you can always recover fr
 - **Plugin system:** Claude Code native plugin format (`.claude-plugin/plugin.json`, `hooks/hooks.json`, `commands/*.md`)
 - **Backend:** Any git remote (GitHub, GitLab, Bitbucket, Gitea, self-hosted, bare repo, etc.)
 
+## For Claude Code Agents
+
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md) — a reference document for Claude Code agents that need to install and configure claude-sync on behalf of users. It includes prerequisite checks, step-by-step setup instructions, the sync engine's exported function reference, and important behavioral notes (e.g., always show diffs before pulling, rules require confirmation).
+
 ## Disclaimer
 
 - This is a **community plugin**, not an official Anthropic product. It is not affiliated with, endorsed by, or supported by Anthropic.

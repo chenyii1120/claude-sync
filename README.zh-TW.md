@@ -288,6 +288,10 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 - **插件系統：** Claude Code 原生插件格式（`.claude-plugin/plugin.json`、`hooks/hooks.json`、`commands/*.md`）
 - **後端：** 任意 git remote（GitHub、GitLab、Bitbucket、Gitea、自架伺服器、bare repo 等）
 
+## 給 Claude Code Agent 的指引
+
+參閱 [SETUP_GUIDE.md](./SETUP_GUIDE.md) — 這是一份供 Claude Code agent 代替使用者安裝和設定 claude-sync 時使用的參考文件。內容包含前置條件檢查、逐步設定說明、同步引擎的匯出函式參考，以及重要的行為注意事項（例如：拉取前必須顯示差異、rules 變更需要確認）。
+
 ## 免責聲明
 
 - 這是一個**社群插件**，並非 Anthropic 官方產品，與 Anthropic 沒有任何關聯、背書或支援關係。
