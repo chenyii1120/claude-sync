@@ -1,5 +1,7 @@
 # claude-sync
 
+[繁體中文](./README.zh-TW.md)
+
 Sync your Claude Code settings, plugins, and commands across machines using any git remote.
 
 No extra dependencies. No server. Just one private git repo.
@@ -7,7 +9,7 @@ No extra dependencies. No server. Just one private git repo.
 ## Install
 
 ```bash
-# From marketplace (when published)
+# From marketplace
 claude plugin install claude-sync
 
 # From source (for development)
@@ -44,7 +46,7 @@ claude plugin install /path/to/claude-sync
 
 | Item | Strategy |
 |------|----------|
-| `settings.json` | Whitelist merge (`language`, `enabledPlugins` only) |
+| `settings.json` | Whitelist merge (`language`, `enabledPlugins`) |
 | `installed_plugins.json` | Full sync with path transformation |
 | `known_marketplaces.json` | Full sync with path transformation |
 | `~/.claude/commands/` | Full directory sync |
@@ -52,15 +54,12 @@ claude plugin install /path/to/claude-sync
 
 ## What Does NOT Get Synced
 
-- `env` in settings (may contain API keys)
-- `statusLine` in settings (machine-specific paths)
-- `permissions` in settings (per-machine security)
+- Machine-specific settings (`statusLine`, `permissions`)
 - Plugin source code (`plugins/cache/`) — reinstall via marketplace
 - Session transcripts, debug logs, conversation history
 
 ## Security
 
-- **Secrets excluded by default** — `env` field never synced unless opted in
 - **Backup before every pull** — auto-backup with max 5 retained
 - **Rules require confirmation** — pull shows diff and asks before applying rules
 - **Private repo recommended** — your settings stay private
