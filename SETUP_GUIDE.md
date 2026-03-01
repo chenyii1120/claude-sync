@@ -164,13 +164,20 @@ Always show the diff to the user before pulling. Each diff entry contains:
 
 2. **Rules require explicit confirmation.** If `/sync-pull` includes changes to `~/.claude/rules/`, show the full diff and ask the user to confirm before applying. This is a security measure against supply chain attacks.
 
-3. **Check for missing plugins after pull.** If the pull result contains `missingPlugins`, inform the user which plugins need to be reinstalled:
+3. **Auto-reinstall missing plugins after pull.** After a successful pull, check for missing marketplaces and plugins:
+
+   ```bash
+   node -e "
+     const s = require('PLUGIN_ROOT/lib/sync-engine.js');
+     const mp = s.detectMissingMarketplaces();
+     const pl = s.detectMissingPlugins();
+     console.log(JSON.stringify({ missingMarketplaces: mp, missingPlugins: pl }));
+   "
    ```
-   The following plugins are listed in your sync but not installed on this machine:
-   - superpowers@claude-plugins-official
-   - context7@claude-plugins-official
-   Run `claude plugin update` to install them.
-   ```
+
+   - For each missing marketplace, run: `claude plugin marketplace add <source>:<repo>` (e.g., `claude plugin marketplace add github:anthropics/claude-plugins-official`)
+   - After marketplaces are restored, run: `claude plugin update` to reinstall all missing plugins
+   - This ensures the pull results in a fully working setup, not just config files without actual plugin code
 
 4. **Backup location.** Every pull creates a backup at `~/.claude/sync-backups/`. If something goes wrong, restore with `/sync-restore`.
 
@@ -204,3 +211,4 @@ All functions are available from `require('PLUGIN_ROOT/lib/sync-engine.js')`:
 | `loadConfig()` | Read sync config |
 | `gitFetch(timeoutMs)` | Fetch from remote with timeout |
 | `detectMissingPlugins()` | List plugins in config but not installed locally |
+| `detectMissingMarketplaces()` | List marketplaces in config but not cloned locally |

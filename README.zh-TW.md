@@ -76,7 +76,7 @@ claude plugin install /path/to/claude-sync
 3. **匯入設定** — 將遠端設定合併到本地 `settings.json`。黑名單欄位（如 `statusLine`）會從本地保留，永遠不會被覆蓋
 4. **匯入插件設定** — 將 `${CLAUDE_HOME}` 佔位符轉換回本地絕對路徑，寫入 `~/.claude/plugins/`
 5. **匯入 commands/rules** — 從 repo 複製到 `~/.claude/commands/` 和 `~/.claude/rules/`。rules 的變更會先顯示給使用者確認後才套用（安全措施）
-6. **偵測缺少的插件** — 匯入後檢查 `installed_plugins.json` 中的 `installPath` 是否指向不存在的目錄。如果有，會回報哪些插件需要透過 `claude plugin update` 重新安裝
+6. **自動重裝插件** — 匯入後偵測缺少的 marketplace clone 和插件安裝。自動執行 `claude plugin marketplace add` 補回缺少的 marketplace 來源，再執行 `claude plugin update` 重新安裝所有缺少的插件。確保 pull 後得到完整可用的環境，而不只是設定檔的空殼
 
 ### `/sync-status`
 
@@ -278,7 +278,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 | Push 被拒絕 | 自動 fetch + merge + 重試 |
 | 合併衝突 | Last-write-wins + 備份安全網 |
 | 並行同步 | Lockfile 防止同時操作 |
-| Pull 後有缺少的插件 | 回報哪些插件需要 `claude plugin update` |
+| Pull 後有缺少的插件 | 自動重裝：補回缺少的 marketplace，然後執行 `claude plugin update` |
 | 沒有全域 git identity | 自動在同步 repo 中設定（繼承全域設定或使用預設值） |
 
 ## 技術棧

@@ -76,7 +76,7 @@ Pulls remote settings and applies them locally.
 3. **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 4. **Import plugin configs** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths and writes to `~/.claude/plugins/`
 5. **Import commands/rules** — Copies from repo to `~/.claude/commands/` and `~/.claude/rules/`. Rules changes are shown to the user with a confirmation prompt before applying (security measure)
-6. **Missing plugin detection** — After import, checks if any `installPath` in `installed_plugins.json` points to a non-existent directory. If so, reports which plugins need to be reinstalled via `claude plugin update`
+6. **Auto plugin reinstallation** — After import, detects missing marketplace clones and plugin installations. Automatically runs `claude plugin marketplace add` for each missing marketplace source, then `claude plugin update` to reinstall all missing plugins. This ensures a pull results in a fully working setup, not just config files
 
 ### `/sync-status`
 
@@ -278,7 +278,7 @@ All git history is preserved. If something goes wrong, you can always recover fr
 | Push rejected | Auto fetch + merge + retry |
 | Merge conflict | Last-write-wins + backup safety net |
 | Concurrent sync | Lockfile prevents simultaneous operations |
-| Missing plugins after pull | Reports which plugins need `claude plugin update` |
+| Missing plugins after pull | Auto-reinstalls: adds missing marketplaces, then runs `claude plugin update` |
 | No global git identity | Auto-configures in sync repo (inherits from global config or uses defaults) |
 
 ## Tech Stack

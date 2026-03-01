@@ -41,7 +41,25 @@ Pull settings from the user's sync repo and apply them locally.
 5. **Report results:**
    - Show what changed (settings fields, plugin configs, commands, rules)
    - Show backup location: "Backup saved to [path]"
-   - If `missingPlugins` is non-empty: "The following plugins are in your sync list but not installed on this machine: [list]. Run `claude plugin update` to install them."
    - If `pulled: false`: "Already up to date."
 
 6. **For rules/ changes**: Show full diff and ask user to explicitly confirm before applying. This is a security measure.
+
+7. **Auto-reinstall missing plugins** — After pull completes successfully, check for missing marketplaces and plugins:
+
+   ```bash
+   node -e "
+     const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+     const mp = s.detectMissingMarketplaces();
+     const pl = s.detectMissingPlugins();
+     console.log(JSON.stringify({ missingMarketplaces: mp, missingPlugins: pl }));
+   "
+   ```
+
+   - **Missing marketplaces:** For each entry, run `claude plugin marketplace add <source>:<repo>`. Example:
+     ```bash
+     claude plugin marketplace add github:anthropics/claude-plugins-official
+     ```
+   - **Missing plugins:** After all marketplaces are restored, run `claude plugin update` to reinstall all missing plugins at once.
+   - Report to the user what was reinstalled.
+   - If any reinstallation fails, report the error but do not roll back the pull.
