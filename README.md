@@ -12,7 +12,7 @@ No extra dependencies. No server. Just one private git repo.
 
 ```bash
 # 1. Add the marketplace
-claude plugin marketplace add github:chenyii1120/claude-sync
+claude plugin marketplace add chenyii1120/claude-sync
 
 # 2. Install the plugin
 claude plugin install claude-sync

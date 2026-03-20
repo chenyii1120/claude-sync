@@ -12,7 +12,7 @@
 
 ```bash
 # 1. 添加 marketplace
-claude plugin marketplace add github:chenyii1120/claude-sync
+claude plugin marketplace add chenyii1120/claude-sync
 
 # 2. 安裝插件
 claude plugin install claude-sync

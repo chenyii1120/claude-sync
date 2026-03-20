@@ -1,0 +1,11 @@
+{
+  "name": "claude-sync",
+  "description": "A marketplace for claude-sync plugin",
+  "plugins": [
+    {
+      "name": "claude-sync",
+      "description": "Sync your Claude Code settings, plugins, and commands across machines using any git remote",
+      "source": ".."
+    }
+  ]
+}
