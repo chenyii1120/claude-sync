@@ -79,9 +79,11 @@ Exports your local settings to the sync repo and pushes to remote.
 
 2. 🔌 Reads `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, transforms absolute paths → `${CLAUDE_HOME}` placeholders, writes to `repo/global/`
 
-3. 📂 Copies `~/.claude/commands/`, `~/.claude/rules/`, and `~/.claude/agents/` to `repo/user-config/`
+3. 🔌 Copies plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific config dirs) to `repo/global/plugin-data/`, excluding rebuildable content (`cache/`, `marketplaces/`)
 
-4. 📤 Runs `git add -A && git commit && git push`
+4. 📂 Copies `~/.claude/commands/`, `~/.claude/rules/`, `~/.claude/agents/`, `~/.claude/skills/`, and `~/.claude/hooks/` to `repo/user-config/`
+
+5. 📤 Runs `git add -A && git commit && git push`
 
 5. 🔄 If push is rejected (remote has newer commits), automatically fetches, performs field-level JSON merge, then retries
 
@@ -91,15 +93,17 @@ Exports your local settings to the sync repo and pushes to remote.
 
 Pulls remote settings and applies them locally.
 
-1. 💾 **Auto-backup** — Snapshots your current settings, plugin configs, commands, rules, and agents to `~/.claude/sync-backups/` (max 5 retained, oldest auto-pruned)
+1. 💾 **Auto-backup** — Snapshots your current settings, plugin configs, plugin data, commands, rules, agents, skills, and hooks to `~/.claude/sync-backups/` (max 5 retained, oldest auto-pruned)
 
-2. 🔄 **Fetch + merge** — If merge conflicts occur, performs field-level JSON merge with remote preference
+2. 📤 **Export + commit local state** — Exports current local `~/.claude/` state and commits to the repo before merging, so smart merge sees both sides for a correct 3-way merge
 
-3. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
+3. 🔄 **Fetch + merge** — If merge conflicts occur, performs field-level JSON merge with remote preference
 
-4. 🔌 **Import plugin configs** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths and writes to `~/.claude/plugins/`
+4. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 
-5. 📂 **Import commands / rules / agents** — Mirror syncs from repo to local directories. Files deleted on the source machine are also removed locally. Rules changes are shown to the user with a confirmation prompt before applying (security measure)
+5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs)
+
+6. 📂 **Import commands / rules / agents / skills / hooks** — Mirror syncs from repo to local directories. Files deleted on the source machine are also removed locally. Changes to `rules/`, `skills/`, and `hooks/` are shown to the user with a confirmation prompt before applying (security measure — these may contain executable code)
 
 6. 🔧 **Auto plugin reinstallation** — Detects missing marketplace clones and plugin installations. Automatically runs:
    - `claude plugin marketplace add` for each missing marketplace source
@@ -121,9 +125,9 @@ Pulls remote settings and applies them locally.
 
 ### `/sync-diff` — Preview changes
 
-Previews JSON-level differences between local and remote settings **without applying anything**.
+Previews differences between local and remote **without applying anything**.
 
-For each changed field, shows the local value vs. remote value. Also shows file-level diffs for plugin configs.
+Shows field-level diffs for settings, file-level diffs for plugin configs, and file-level status (modified/local-only/remote-only) for user config (commands, rules, agents, skills, hooks) and plugin data.
 
 ---
 
@@ -305,6 +309,9 @@ Session start (new / resume / clear / compact)
 | `~/.claude/commands/` | `user-config/commands/` | Mirror sync (adds, updates, and deletes) |
 | `~/.claude/rules/` | `user-config/rules/` | Mirror sync |
 | `~/.claude/agents/` | `user-config/agents/` | Mirror sync |
+| `~/.claude/skills/` | `user-config/skills/` | Mirror sync |
+| `~/.claude/hooks/` | `user-config/hooks/` | Mirror sync |
+| `~/.claude/plugins/` (selective) | `global/plugin-data/` | CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
 | `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists |
 
 ### ❌ What Does NOT Get Synced
@@ -314,7 +321,7 @@ Session start (new / resume / clear / compact)
 | `statusLine` field in settings | Contains machine-specific absolute paths (e.g., `/opt/homebrew/bin/node`) that would break on another machine |
 | `plugins/cache/` | Plugin source code; **auto-rebuilt** on pull via `claude plugin update` |
 | `plugins/marketplaces/` | Marketplace git clones; **auto-rebuilt** on pull via `claude plugin marketplace add` |
-| `plugins/blocklist.json` | Machine-specific preference |
+| `plugins/install-counts-cache.json` | Cache data, rebuildable |
 | `projects/*/*.jsonl` | Session transcripts; large and sensitive |
 | `debug/`, `cache/`, `history.jsonl` | Machine-specific temporary data |
 | `session-env/`, `tasks/`, `teams/`, `todos/` | Session-specific runtime state |

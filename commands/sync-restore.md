@@ -21,7 +21,7 @@ Help the user restore settings from a backup.
      console.log('Restored successfully');
    "
    ```
-5. Confirm what was restored (settings, plugin configs, commands, rules, agents).
+5. Confirm what was restored (settings, plugin configs, plugin data, commands, rules, agents, skills, hooks).
 
 6. **Auto-reinstall missing plugins** — After restore, check for missing marketplaces and plugins:
 

@@ -39,11 +39,11 @@ Pull settings from the user's sync repo and apply them locally.
    ```
 
 5. **Report results:**
-   - Show what changed (settings fields, plugin configs, commands, rules)
+   - Show what changed (settings fields, plugin configs, plugin data, commands, rules, agents, skills, hooks)
    - Show backup location: "Backup saved to [path]"
    - If `pulled: false`: "Already up to date."
 
-6. **For rules/ changes**: Show full diff and ask user to explicitly confirm before applying. This is a security measure.
+6. **For `rules/`, `skills/`, and `hooks/` changes**: Show full diff and ask user to explicitly confirm before applying. These directories may contain executable code (JS, shell scripts) — applying untrusted changes is a security risk.
 
 7. **Auto-reinstall missing plugins** — After pull completes successfully, check for missing marketplaces and plugins:
 
