@@ -2,6 +2,8 @@
 
 [English](./README.md)
 
+> **Early Preview** — 此插件正在積極開發中，功能可能會變動，使用過程中可能遇到問題。歡迎透過 [GitHub Issues](https://github.com/chenyii1120/claude-sync/issues) 回報 bug 或提供建議。
+
 透過任意 git remote 在多台機器之間同步你的 Claude Code 設定、插件和自訂指令。
 
 不需要額外依賴、不需要架 server，只需要一個私有 git repo。

@@ -2,6 +2,8 @@
 
 [繁體中文](./README.zh-TW.md)
 
+> **Early Preview** — This plugin is under active development. Features may change, and you may encounter rough edges. Bug reports and feedback are welcome via [GitHub Issues](https://github.com/chenyii1120/claude-sync/issues).
+
 Sync your Claude Code settings, plugins, and commands across machines using any git remote.
 
 No extra dependencies. No server. Just one private git repo.
