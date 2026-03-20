@@ -20,6 +20,10 @@ try {
     try {
       const result = syncEngine.push();
       if (result.pushed) {
+        if (result.mergeWarnings && result.mergeWarnings.length > 0) {
+          const files = result.mergeWarnings.map(w => w.file).join(', ');
+          process.stderr.write(`[claude-sync] \u26a0\ufe0f ${files} \u7121\u6cd5\u89e3\u6790\u70ba JSON\uff0c\u5df2\u8df3\u904e\u6b04\u4f4d\u5c64\u7d1a\u5408\u4f75\u3002\n`);
+        }
         if (result.mergeConflicts && result.mergeConflicts.length > 0) {
           const keys = result.mergeConflicts.map(c => c.key).join(', ');
           process.stderr.write(`[claude-sync] \u26a0\ufe0f \u81ea\u52d5\u63a8\u9001\u5b8c\u6210\uff0c\u4f46\u6709 ${result.mergeConflicts.length} \u500b\u6b04\u4f4d\u885d\u7a81\uff08\u5df2\u4fdd\u7559\u672c\u5730\u7248\u672c\uff09\uff1a${keys}\n`);
