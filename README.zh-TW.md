@@ -23,6 +23,11 @@ claude plugin install claude-sync
 claude plugin install /path/to/claude-sync
 ```
 
+> **安裝失敗？** 如果 `plugin install` 出現 `Permission denied (publickey)` 錯誤，這是 [Claude Code 的已知 bug](https://github.com/anthropics/claude-code/issues/29722)（plugin install 強制使用 SSH，即使是 public repo）。執行以下指令即可解決：
+> ```bash
+> git config --global url."https://github.com/".insteadOf "git@github.com:"
+> ```
+
 ## 🚀 快速開始
 
 **第一台機器：**
