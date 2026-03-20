@@ -20,9 +20,13 @@ Help the user initialize claude-sync. Follow these steps:
 3. **Ask the user**: Do they want to:
    - **(A) Create a new private GitHub repo** (requires `gh` CLI authenticated) — run:
      ```
-     gh repo create claude-config-sync --private --clone --description "Claude Code settings sync"
+     gh repo create claude-config-sync --private --description "Claude Code settings sync"
      ```
-     Then move the clone to `~/.claude/sync/repo/`.
+     Then get the repo URL:
+     ```
+     gh repo view claude-config-sync --json url -q .url
+     ```
+     Use this URL in step 4. Do NOT use `--clone` — `init()` handles cloning internally.
    - **(B) Connect to an existing git repo** — ask for the remote URL.
 
 4. **Run init.** Use the sync-engine:

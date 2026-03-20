@@ -52,9 +52,10 @@ Run `/sync-init` in a Claude Code session. The command will guide the user throu
 1. Ask the user if they want to create a new private GitHub repo or connect to an existing one.
 2. For a new repo, run:
    ```bash
-   gh repo create claude-config-sync --private --clone --description "Claude Code settings sync"
+   gh repo create claude-config-sync --private --description "Claude Code settings sync"
    ```
-3. Move the clone to `~/.claude/sync/repo/` or use it as the remote URL for `init()`.
+   Then get the URL: `gh repo view claude-config-sync --json url -q .url`
+3. Pass the URL to `init()`. Do NOT use `--clone` — `init()` handles cloning internally.
 
 **If `gh` CLI is not available:**
 
