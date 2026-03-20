@@ -203,6 +203,12 @@ Always show the diff to the user before pulling. Each diff entry contains:
    - Is the network available? (`git ls-remote origin main` in the sync repo)
    - Is another sync in progress? (lockfile at `~/.claude/sync/.sync.lock` — if stale, remove it)
 
+9. **Merge conflict handling.** `push()` and `pull()` now return a `mergeConflicts` array in their results. Each conflict has `key`, `localValue`, `remoteValue`, `localDeleted`, `remoteDeleted`. When `mergeConflicts` is non-empty:
+   - Present each conflict to the user in a readable format (table showing field name, kept value, discarded value)
+   - For push: local values were kept by default. Ask if user wants to switch to remote values.
+   - For pull: remote values were kept by default. Ask if user wants to keep local values.
+   - If user wants to change values: modify the repo JSON files, commit, and push.
+
 ## Exported Functions Reference
 
 All functions are available from `require('PLUGIN_ROOT/lib/sync-engine.js')`:
@@ -224,3 +230,5 @@ All functions are available from `require('PLUGIN_ROOT/lib/sync-engine.js')`:
 | `gitFetch(timeoutMs)` | Fetch from remote with timeout |
 | `detectMissingPlugins()` | List plugins in config but not installed locally |
 | `detectMissingMarketplaces()` | List marketplaces in config but not cloned locally |
+| `safeGitShow(ref, filePath)` | Read file content from a git ref, returns `null` if not found |
+| `mergeJsonFields(base, local, remote, preference)` | Field-level 3-way JSON merge, returns `{ result, conflicts }` |

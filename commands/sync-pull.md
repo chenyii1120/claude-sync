@@ -63,3 +63,19 @@ Pull settings from the user's sync repo and apply them locally.
    - **Missing plugins:** After all marketplaces are restored, run `claude plugin update` to reinstall all missing plugins at once.
    - Report to the user what was reinstalled.
    - If any reinstallation fails, report the error but do not roll back the pull.
+
+8. **Handle merge conflicts (if any):**
+   If the result contains `mergeConflicts` (non-empty array), the pull already completed
+   with remote values as default. Present each conflict to the user:
+
+   > 拉取完成，但合併時發現以下欄位在兩邊都被修改：
+   >
+   > | 欄位 | 遠端（已保留） | 本地（已捨棄） |
+   > |------|-------------|-------------|
+   > | theme | "light" | "dark" |
+   >
+   > 要改用本地的值嗎？
+
+   If user wants to keep local values for some fields:
+   - Modify the local ~/.claude/settings.json with chosen values
+   - Tell the user: "Settings updated. Run /sync-push to push your choices to remote."

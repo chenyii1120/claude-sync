@@ -81,7 +81,7 @@ Exports your local settings to the sync repo and pushes to remote.
 
 4. 📤 Runs `git add -A && git commit && git push`
 
-5. 🔄 If push is rejected (remote has newer commits), automatically fetches, merges with local-wins strategy (`-X ours`), and retries
+5. 🔄 If push is rejected (remote has newer commits), automatically fetches, performs field-level JSON merge, then retries
 
 ---
 
@@ -91,7 +91,7 @@ Pulls remote settings and applies them locally.
 
 1. 💾 **Auto-backup** — Snapshots your current settings, plugin configs, commands, rules, and agents to `~/.claude/sync-backups/` (max 5 retained, oldest auto-pruned)
 
-2. 🔄 **Fetch + merge** — If merge conflicts occur, falls back to `reset --hard origin/main` (remote wins)
+2. 🔄 **Fetch + merge** — If merge conflicts occur, performs field-level JSON merge with remote preference
 
 3. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 
@@ -340,21 +340,42 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ## ⚡ Conflict Resolution
 
-Uses a **last-write-wins** strategy:
+Uses **JSON field-level 3-way merge**:
 
-- 📤 **Push conflict** (remote has newer commits)
+- 📊 **Non-conflicting fields** — Merged automatically. Machine A changed theme, machine B changed language → both kept.
 
-  Fetches remote, merges with `-X ours` (your local changes win), then pushes the merged result.
+- ⚠️ **Conflicting fields (interactive mode)** — When using /sync-push or /sync-pull,
+  Claude presents each conflicting field in natural language, showing local and remote values, letting you choose which to keep.
 
-- 📥 **Pull conflict** (merge fails)
-
-  Aborts merge, resets to remote HEAD (`reset --hard origin/main`). Your local settings are overwritten with remote, but a backup was already created before the pull.
+- 🤖 **Conflicting fields (automatic mode)** — During SessionEnd auto-push, conflicts are resolved by operation direction:
+  push keeps local, pull keeps remote. Conflicting field names are output to stderr.
 
 - 🔒 **Concurrent sync prevention**
 
   A filesystem-based lockfile (`~/.claude/sync/.sync.lock`) prevents two sync operations from running simultaneously. Uses atomic `mkdir` — if the directory already exists, the lock acquisition fails.
 
 > All git history is preserved. If something goes wrong, you can always recover from git history or from the auto-backups in `~/.claude/sync-backups/`.
+
+### Conflict Resolution Flow (push example)
+
+> After running `/sync-push`, if the remote also has changes:
+
+1. 📊 Claude auto-merges non-conflicting fields (e.g., you changed theme, remote changed language → both kept)
+
+2. ⚠️ If there are conflicting fields, Claude presents:
+   > Push completed, but the following fields were modified on both sides:
+   >
+   > | Field | Local (kept) | Remote (discarded) |
+   > |-------|-------------|-------------------|
+   > | theme | "dark" | "light" |
+   >
+   > Want to use the remote values instead? You can switch all to remote, or pick individual fields.
+
+3. ✅ After you choose, Claude applies your decision and re-pushes.
+
+> `/sync-pull` follows the same flow, but reversed (remote values kept by default).
+>
+> **SessionEnd auto-push** cannot interact, so conflicting fields automatically keep local values, with a conflict summary output to stderr.
 
 ---
 
@@ -367,7 +388,7 @@ Uses a **last-write-wins** strategy:
 | 🔧 `gh` CLI not installed | Skips auto repo creation, asks for manual URL |
 | 🔧 `git` not installed | Blocks init with clear error |
 | 📤 Push rejected | Auto fetch + merge + retry |
-| ⚡ Merge conflict | Last-write-wins + backup safety net |
+| ⚡ Merge conflict | Field-level 3-way merge + backup safety net |
 | 🔒 Concurrent sync | Lockfile prevents simultaneous operations |
 | 🔌 Missing plugins after pull | Auto-reinstalls: marketplace add + plugin update |
 | 👤 No global git identity | Auto-configures in sync repo (inherits from global config or uses defaults) |
@@ -397,7 +418,7 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) — a reference document for Claude Code 
 
 - Your `settings.json` may contain sensitive data (e.g., environment variables with API keys or tokens). This plugin pushes them to a git remote. **Use a private repository** and review what gets synced.
 
-- Conflict resolution uses a simple last-write-wins strategy. In rare cases, settings from one machine may overwrite changes made on another. Git history is preserved as a safety net.
+- Conflict resolution uses field-level 3-way merge. In rare cases with true conflicts (same field changed on both sides), one value must be chosen. In interactive mode you decide; in automatic mode, the operation direction decides. Git history is preserved as a safety net.
 
 - If Anthropic introduces native settings sync in the future, this plugin may become redundant.
 

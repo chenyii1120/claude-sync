@@ -81,7 +81,7 @@ claude plugin install /path/to/claude-sync
 
 4. 📤 執行 `git add -A && git commit && git push`
 
-5. 🔄 如果 push 被拒絕（遠端有更新的 commit），自動 fetch、以本地優先策略合併（`-X ours`），然後重試
+5. 🔄 如果 push 被拒絕（遠端有更新的 commit），自動 fetch、執行欄位層級 JSON merge，然後重試
 
 ---
 
@@ -91,7 +91,7 @@ claude plugin install /path/to/claude-sync
 
 1. 💾 **自動備份** — 將目前的設定、插件設定、commands、rules 和 agents 快照到 `~/.claude/sync-backups/`（最多保留 5 份，自動清除最舊的）
 
-2. 🔄 **Fetch + merge** — 若發生合併衝突，退回到 `reset --hard origin/main`（遠端優先）
+2. 🔄 **Fetch + merge** — 若發生合併衝突，執行欄位層級 JSON merge（遠端優先）
 
 3. ⚙️ **匯入設定** — 將遠端設定合併到本地 `settings.json`。黑名單欄位（如 `statusLine`）會從本地保留，永遠不會被覆蓋
 
@@ -340,21 +340,42 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ## ⚡ 衝突解決
 
-使用 **last-write-wins** 策略：
+使用 **JSON 欄位層級的 3-way merge**：
 
-- 📤 **Push 衝突**（遠端有更新的 commit）
+- 📊 **非衝突欄位** — 自動合併。機器 A 改了 theme、機器 B 改了 language，兩個都保留。
 
-  Fetch 遠端，以 `-X ours` 合併（你的本地變更優先），然後推送合併結果。
+- ⚠️ **衝突欄位（互動模式）** — 當你透過 /sync-push 或 /sync-pull 操作時，
+  Claude 會用自然語言呈現每個衝突的欄位，顯示本地和遠端的值，讓你選擇要保留哪一個。
 
-- 📥 **Pull 衝突**（合併失敗）
-
-  中止合併，重設為遠端 HEAD（`reset --hard origin/main`）。你的本地設定會被遠端覆蓋，但 pull 之前已經建立了備份。
+- 🤖 **衝突欄位（自動模式）** — SessionEnd 自動推送時，衝突欄位依操作方向決定：
+  push 保留本地、pull 保留遠端。衝突欄位名稱會輸出到 stderr。
 
 - 🔒 **並行同步防護**
 
   檔案系統型 lockfile（`~/.claude/sync/.sync.lock`）防止兩個同步操作同時執行。使用原子性的 `mkdir` — 如果目錄已存在，取得鎖定會失敗。
 
 > 所有 git 歷史都會保留。如果出了問題，你隨時可以從 git 歷史或 `~/.claude/sync-backups/` 的自動備份中恢復。
+
+### 衝突解決流程（以 push 為例）
+
+> `/sync-push` 執行後，如果遠端也有變更：
+
+1. 📊 Claude 自動合併非衝突欄位（例如你改了 theme，遠端改了 language → 兩者都保留）
+
+2. ⚠️ 若有衝突欄位，Claude 會呈現：
+   > 推送完成，但合併時發現以下欄位在兩邊都被修改：
+   >
+   > | 欄位 | 本地（已保留） | 遠端（已捨棄） |
+   > |------|-------------|-------------|
+   > | theme | "dark" | "light" |
+   >
+   > 要改用遠端的值嗎？可以選擇全部改用遠端、或指定個別欄位。
+
+3. ✅ 你選擇後，Claude 會套用你的決定並重新推送。
+
+> `/sync-pull` 的流程相同，但方向相反（預設保留遠端值）。
+>
+> **SessionEnd 自動推送** 時無法互動，衝突欄位自動保留本地版本，並在 stderr 輸出衝突摘要。
 
 ---
 
@@ -367,7 +388,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 | 🔧 未安裝 `gh` CLI | 跳過自動建立 repo，要求手動輸入 URL |
 | 🔧 未安裝 `git` | 阻止初始化，顯示清楚的錯誤訊息 |
 | 📤 Push 被拒絕 | 自動 fetch + merge + 重試 |
-| ⚡ 合併衝突 | Last-write-wins + 備份安全網 |
+| ⚡ 合併衝突 | 欄位層級 3-way merge + 備份安全網 |
 | 🔒 並行同步 | Lockfile 防止同時操作 |
 | 🔌 Pull 後有缺少的插件 | 自動重裝：marketplace add + plugin update |
 | 👤 沒有全域 git identity | 自動在同步 repo 中設定（繼承全域設定或使用預設值） |
@@ -397,7 +418,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 - 你的 `settings.json` 可能包含敏感資料（例如帶有 API key 或 token 的環境變數）。本插件會將這些資料推送到 git remote。**請務必使用私有 repo**，並檢查同步的內容。
 
-- 衝突解決採用簡單的 last-write-wins 策略。在少數情況下，某台機器的設定可能會覆蓋另一台的變更。Git 歷史紀錄會保留作為安全網。
+- 衝突解決採用欄位層級 3-way merge。在真正衝突（同一欄位兩邊都修改）的少數情況下，必須擇一保留。互動模式下由你決定；自動模式下依操作方向決定。Git 歷史紀錄會保留作為安全網。
 
 - 若 Anthropic 未來推出原生的設定同步功能，本插件可能不再需要。
 

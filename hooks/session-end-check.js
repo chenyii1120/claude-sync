@@ -20,7 +20,12 @@ try {
     try {
       const result = syncEngine.push();
       if (result.pushed) {
-        process.stderr.write('[claude-sync] \u2705 \u5df2\u81ea\u52d5\u63a8\u9001\u8b8a\u66f4\u5230\u9060\u7aef\u3002\n');
+        if (result.mergeConflicts && result.mergeConflicts.length > 0) {
+          const keys = result.mergeConflicts.map(c => c.key).join(', ');
+          process.stderr.write(`[claude-sync] \u26a0\ufe0f \u81ea\u52d5\u63a8\u9001\u5b8c\u6210\uff0c\u4f46\u6709 ${result.mergeConflicts.length} \u500b\u6b04\u4f4d\u885d\u7a81\uff08\u5df2\u4fdd\u7559\u672c\u5730\u7248\u672c\uff09\uff1a${keys}\n`);
+        } else {
+          process.stderr.write('[claude-sync] \u2705 \u5df2\u81ea\u52d5\u63a8\u9001\u8b8a\u66f4\u5230\u9060\u7aef\u3002\n');
+        }
       }
     } catch (e) {
       process.stderr.write(`[claude-sync] \u26a0\ufe0f \u81ea\u52d5\u63a8\u9001\u5931\u6557\uff1a${e.message}\n`);
