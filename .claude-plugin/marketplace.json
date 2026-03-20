@@ -10,10 +10,7 @@
     {
       "name": "claude-sync",
       "description": "Sync your Claude Code settings, plugins, and commands across machines using any git remote",
-      "source": {
-        "source": "github",
-        "repo": "chenyii1120/claude-sync"
-      },
+      "source": "./",
       "category": "productivity",
       "homepage": "https://github.com/chenyii1120/claude-sync"
     }
