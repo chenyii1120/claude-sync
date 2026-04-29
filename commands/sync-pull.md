@@ -12,36 +12,58 @@ Pull settings from the user's sync repo and apply them locally.
 
 1. **Check initialized.** If not, tell user to run `/sync-init` first.
 
-2. **Show diff first** by running:
+2. **Preview the pull** to determine the safest mode:
+
    ```bash
    node -e "
      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
-     s.gitFetch(10000);
+     console.log(JSON.stringify(s.previewPull(), null, 2));
+   "
+   ```
+
+   The `recommendation` field tells you which path to take:
+
+   | recommendation | what it means | what you do |
+   |---|---|---|
+   | `up-to-date` | Local and remote both match the last-sync base. | Tell the user "Already up to date." Skip the rest. |
+   | `first-pull` | The user just ran `/sync-init` against an existing repo and `~/.claude` hasn't been hydrated yet. Local "missing" fields must NOT be treated as deletions. | Skip diff. Run pull (mode='safe' is fine — engine auto-detects first-pull). |
+   | `safe-pull` | Remote has new changes; local hasn't diverged from base. | Show `localDelta` (will be empty) and remote diff via `diffSettings()`/`diffPluginConfigs()`. Confirm with user, then run pull. |
+   | `push-first` | Local has unpushed changes; remote has not advanced. | Tell the user "Your local has unpushed changes. Run `/sync-push` to push them, then `/sync-pull` again." Stop. |
+   | `merge-with-conflicts` | Both sides have advanced relative to base. | Show both `localDelta` (what user has unpushed) AND remote diff. Warn: "Pull will overwrite local-side conflicts with remote values; backup is automatic." Ask user to confirm `mode: 'merge'` or run `/sync-push` first. |
+
+3. **Show the diff** for `safe-pull` and `merge-with-conflicts` cases:
+   ```bash
+   node -e "
+     const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
      const diffs = s.diffSettings();
      const pluginDiffs = s.diffPluginConfigs();
      console.log(JSON.stringify({ settings: diffs, plugins: pluginDiffs }, null, 2));
    "
    ```
 
-3. **Show the diff to the user** in a readable format. For each changed field, show local vs remote value.
-
 4. **Ask for confirmation** before applying. If user confirms, run pull:
+
    ```bash
+   # safe-pull / first-pull: default mode
    node -e "
      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
-     try {
-       const result = s.pull();
-       console.log(JSON.stringify(result, null, 2));
-     } catch (e) {
-       console.error('ERROR:', e.message);
-     }
+     console.log(JSON.stringify(s.pull(), null, 2));
+   "
+
+   # merge-with-conflicts: explicit merge mode (required when local has diverged)
+   node -e "
+     const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+     console.log(JSON.stringify(s.pull({ mode: 'merge' }), null, 2));
    "
    ```
+
+   If the result is `{ pulled: false, reason: 'local-changes-pending' }`, the engine refused the pull because local has unpushed work. Report the `localDelta` to the user and stop.
 
 5. **Report results:**
    - Show what changed (settings fields, plugin configs, plugin data, commands, rules, agents, skills, hooks)
    - Show backup location: "Backup saved to [path]"
-   - If `pulled: false`: "Already up to date."
+   - If `pulled: false, reason: 'up-to-date'`: "Already up to date."
+   - If `mode: 'first-pull'` was used, mention "Initial hydration completed; future pulls will use 3-way merge."
 
 6. **For `rules/`, `skills/`, and `hooks/` changes**: Show full diff and ask user to explicitly confirm before applying. These directories may contain executable code (JS, shell scripts) — applying untrusted changes is a security risk.
 
