@@ -110,9 +110,7 @@ Pulls remote settings and applies them locally.
 
 6. 📂 **Import commands / rules / agents / skills / hooks** — Mirror syncs from repo to local directories. Files deleted on the source machine are also removed locally. Changes to `rules/`, `skills/`, and `hooks/` are shown to the user with a confirmation prompt before applying (security measure — these may contain executable code)
 
-6. 🔧 **Auto plugin reinstallation** — Detects missing marketplace clones and plugin installations. Automatically runs:
-   - `claude plugin marketplace add` for each missing marketplace source
-   - `claude plugin update` to reinstall all missing plugins
+6. 🔧 **Auto plugin reinstallation** — Detects missing plugin installations and reinstalls them via `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones each parent marketplace on demand, so a separate `marketplace add` is only needed for marketplaces declared in `enabledPlugins` that have no plugins to trigger a side-effect clone.
 
    > This ensures a pull results in a **fully working setup**, not just config files without actual plugin code.
 
@@ -324,8 +322,8 @@ Session start (new / resume / clear / compact)
 | Item | Reason |
 |------|--------|
 | `statusLine` field in settings | Contains machine-specific absolute paths (e.g., `/opt/homebrew/bin/node`) that would break on another machine |
-| `plugins/cache/` | Plugin source code; **auto-rebuilt** on pull via `claude plugin update` |
-| `plugins/marketplaces/` | Marketplace git clones; **auto-rebuilt** on pull via `claude plugin marketplace add` |
+| `plugins/cache/` | Plugin source code; **auto-rebuilt** on pull via `claude plugin install <plugin>@<marketplace>` |
+| `plugins/marketplaces/` | Marketplace git clones; **auto-cloned on demand** when `claude plugin install` runs (or via `claude plugin marketplace add <owner>/<repo>` for marketplaces with no enabled plugins) |
 | `plugins/install-counts-cache.json` | Cache data, rebuildable |
 | `projects/*/*.jsonl` | Session transcripts; large and sensitive |
 | `debug/`, `cache/`, `history.jsonl` | Machine-specific temporary data |
@@ -404,7 +402,7 @@ Uses **JSON field-level 3-way merge**:
 | 📤 Push rejected | Auto fetch + merge + retry |
 | ⚡ Merge conflict | Field-level 3-way merge + backup safety net |
 | 🔒 Concurrent sync | Lockfile prevents simultaneous operations |
-| 🔌 Missing plugins after pull | Auto-reinstalls: marketplace add + plugin update |
+| 🔌 Missing plugins after pull | Auto-reinstalls via `claude plugin install <plugin>@<marketplace>` (CLI auto-clones marketplace on demand) |
 | 👤 No global git identity | Auto-configures in sync repo (inherits from global config or uses defaults) |
 
 ---

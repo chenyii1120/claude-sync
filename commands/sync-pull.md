@@ -56,11 +56,17 @@ Pull settings from the user's sync repo and apply them locally.
    "
    ```
 
-   - **Missing marketplaces:** For each entry, run `claude plugin marketplace add <source>:<repo>`. Example:
+   - **Missing plugins (reinstall first):** For each plugin, run:
      ```bash
-     claude plugin marketplace add github:anthropics/claude-plugins-official
+     claude plugin install <plugin>@<marketplace>
      ```
-   - **Missing plugins:** After all marketplaces are restored, run `claude plugin update` to reinstall all missing plugins at once.
+     `claude plugin install` will automatically clone the parent marketplace if it's not yet on disk, so you do **not** need to run `marketplace add` separately for marketplaces that have at least one plugin to install.
+   - **Missing marketplaces with no plugins to install:** After plugin installs, re-run the detect step. For any marketplace still missing (i.e., declared but no enabled plugins from it), run:
+     ```bash
+     claude plugin marketplace add <owner>/<repo>
+     ```
+     Example: `claude plugin marketplace add anthropics/claude-plugins-official`. **Do NOT** prefix with `github:` — recent CLI versions reject that format.
+   - If `marketplace add` reports "already on disk — declared in user settings" but the install location still doesn't exist, it means the CLI short-circuited because the marketplace is already declared in `settings.json`. Tell the user: this marketplace has no enabled plugins, so it'll be cloned lazily next time something needs it; this is harmless.
    - Report to the user what was reinstalled.
    - If any reinstallation fails, report the error but do not roll back the pull.
 

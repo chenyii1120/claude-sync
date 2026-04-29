@@ -176,8 +176,8 @@ Always show the diff to the user before pulling. Each diff entry contains:
    "
    ```
 
-   - For each missing marketplace, run: `claude plugin marketplace add <source>:<repo>` (e.g., `claude plugin marketplace add github:anthropics/claude-plugins-official`)
-   - After marketplaces are restored, run: `claude plugin update` to reinstall all missing plugins
+   - For each **missing plugin**, run: `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones the parent marketplace as a side-effect, so a separate `marketplace add` is unnecessary for marketplaces that have at least one plugin to install.
+   - For any marketplace that is *still* missing after the plugin installs (i.e., declared in `enabledPlugins` but with no plugins to trigger a side-effect clone), run: `claude plugin marketplace add <owner>/<repo>` (e.g. `claude plugin marketplace add anthropics/claude-plugins-official`). **Do NOT** prefix with `github:` — recent CLI versions (≥ 2.x) reject that format.
    - This ensures the pull results in a fully working setup, not just config files without actual plugin code
 
 4. **CLAUDE.md sync.** The global `~/.claude/CLAUDE.md` file (user's personal memory) is included in sync. It is exported to `repo/user-config/CLAUDE.md` and imported back during pull. Backups also include CLAUDE.md.
