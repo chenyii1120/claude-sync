@@ -12,7 +12,18 @@ Push the user's local Claude Code settings to their sync repo.
 
 1. **Check initialized.** If not, tell user to run `/sync-init` first.
 
-2. **Run push:**
+2. **Detect unknown sync dirs.** Before pushing, check whether the user has new directories under `~/.claude/` that aren't yet in the allow/skip list:
+
+   ```bash
+   node -e "
+     const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+     console.log(JSON.stringify(s.detectUnknownDirs()));
+   "
+   ```
+
+   For each unknown dir, ask the user `(a)dd to sync / (s)kip permanently / (l)ater` and persist via `addAllowSyncDir(<name>)` or `addSkipSyncDir(<name>)`. (See sync-init.md for the prompt template.) Skip this step silently if the result is empty.
+
+3. **Run push:**
    ```bash
    node -e "
      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
@@ -25,12 +36,12 @@ Push the user's local Claude Code settings to their sync repo.
    "
    ```
 
-3. **Report results:**
+4. **Report results:**
    - If `pushed: true` and no `mergeConflicts` (or empty): "Settings pushed successfully."
    - If `pushed: false, reason: 'no-changes'`: "No changes to push. Already up to date."
    - If error: Show the error message and suggest troubleshooting.
 
-4. **Handle merge conflicts (if any):**
+5. **Handle merge conflicts (if any):**
    If the result contains `mergeConflicts` (non-empty array), the push already completed
    with local values as default. Present each conflict to the user:
 

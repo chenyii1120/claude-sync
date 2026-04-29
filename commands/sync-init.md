@@ -42,7 +42,32 @@ Help the user initialize claude-sync. Follow these steps:
    - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
    - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
-6. **Ask about auto-push.** Ask the user:
+6. **Detect unknown sync dirs.** The default sync set covers `commands/`, `rules/`, `agents/`, `skills/`, `hooks/`. Anything else under `~/.claude/` (e.g. `homunculus/`, custom MCP scripts referenced by hooks) needs explicit user opt-in. Run:
+
+   ```bash
+   node -e "
+     const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+     console.log(JSON.stringify(s.detectUnknownDirs()));
+   "
+   ```
+
+   For each directory in the result, ask the user:
+
+   > 偵測到 `~/.claude/<dir>/` 不在已知同步清單中。
+   > 同步嗎？(a) 加入同步 / (s) 永久跳過 / (l) 之後再決定
+
+   Persist the answer:
+   ```bash
+   # add → allow list
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addAllowSyncDir('<dir>')"
+   # skip → skip list (won't ask again)
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addSkipSyncDir('<dir>')"
+   # later → no change; will be re-prompted next /sync-init or /sync-push
+   ```
+
+   **Special case:** if the user's settings.json has hook commands referencing `$HOME/.claude/<dir>/`, strongly suggest adding that dir — otherwise the hooks will fail on other machines after a sync.
+
+7. **Ask about auto-push.** Ask the user:
 
    > 是否啟用自動推送（autoPush）？啟用後，每次 session 結束時會自動推送你的設定變更到遠端。
 
@@ -61,6 +86,6 @@ Help the user initialize claude-sync. Follow these steps:
      node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); const c = s.loadConfig(); c.autoPush = true; s.saveConfig(c);"
      ```
 
-7. **Chezmoi check.** If `chezmoi managed 2>/dev/null | grep -q .claude`, warn about potential conflicts.
+8. **Chezmoi check.** If `chezmoi managed 2>/dev/null | grep -q .claude`, warn about potential conflicts.
 
 IMPORTANT: Replace `REMOTE_URL_HERE` with the actual URL before running.
