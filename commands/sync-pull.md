@@ -64,10 +64,24 @@ these steps exactly and in order.
    refused because local has unpushed work. Report the `localDelta` to the user and
    stop (they should `/sync-push` first, or re-confirm merge mode).
 
-5. **Resolve unknown remote dirs** (B-03 opt-in). If the result's
-   `unknownRemoteDirs` array is **non-empty**, the repo contains directories this
-   machine has not opted into — they were **NOT** imported. For each one, list its
-   incoming files so the user can decide:
+5. **Warn about suspicious remote dirs, then resolve unknown ones** (B-03 opt-in).
+
+   **Suspicious dirs first:** if the result's `suspiciousRemoteDirs` array is
+   **non-empty**, the repo contains directories whose names differ from a
+   protected directory only by letter case (e.g. `Hooks` vs `hooks`). On
+   macOS/Windows such a name aliases the protected directory on disk, so this
+   pattern looks like a **spoofing attempt** against the sync repo. These dirs
+   were NOT imported, can NEVER be imported, and `addAllowSyncDir` rejects
+   them — do NOT offer an add/skip choice for them. Tell the user explicitly:
+   "The sync repo contains suspicious directories [names] that mimic protected
+   directories. This may indicate the repo was tampered with — review its
+   recent history (`git -C ~/.claude/sync/repo log --stat`) and remove these
+   directories from the repo (e.g. from the machine that pushed them)."
+
+   **Unknown dirs:** if the result's `unknownRemoteDirs` array is
+   **non-empty**, the repo contains directories this machine has not opted
+   into — they were **NOT** imported. For each one, list its incoming files so
+   the user can decide:
 
    ```bash
    node -e "
@@ -141,8 +155,15 @@ these steps exactly and in order.
 
    - Pass to `applyPendingDirs([...])` only the dirs the user approved. If the user
      approves some and declines others, list only the approved ones — the declined
-     dirs are dropped (they'll re-offer next pull).
+     dirs **stay pending** (the state file keeps them) and are re-offered on the
+     next pull. `discardPendingDirs()` clears ALL pending dirs at once.
    - `applyPendingDirs` advances `last-sync`; `discardPendingDirs` does not.
+   - **Warn the user when they decline/discard a dir:** declining means the LOCAL
+     version of that dir wins. The next `/sync-push` from this machine will
+     **overwrite the remote's newer version** of that dir with the local content.
+     Say this explicitly, e.g.: "Note: since you declined the remote `hooks/`
+     changes, your local version is kept, and your next /sync-push will overwrite
+     the newer remote `hooks/` content."
 
 7. **Report results:**
    - Show what changed: settings fields, plugin configs, plugin data, `commands/`,
