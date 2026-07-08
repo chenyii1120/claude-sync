@@ -317,7 +317,9 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 | `~/.claude/skills/` | `user-config/skills/` | 鏡像同步 |
 | `~/.claude/hooks/` | `user-config/hooks/` | 鏡像同步 |
 | `~/.claude/plugins/`（選擇性） | `global/plugin-data/` | CLAUDE.md、blocklist.json、data/、插件專屬目錄。排除 `cache/` 和 `marketplaces/`（自動重建） |
-| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製 |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製；本地刪除後，push 時也會從 repo 移除 |
+
+> **檔案級刪除以 push 端為準。** 本地刪除 `CLAUDE.md`、`settings.json`，或鏡像同步目錄（`commands/`、`rules/`、`agents/`、`skills/`、`hooks/`）內的檔案後執行 `/sync-push`，該檔案也會從 repo 移除。其他機器接著 pull 時，鏡像同步目錄會把該刪除同步過去。但 `CLAUDE.md` 和 `settings.json` 這兩個檔案目前 import 端還沒有做 3-way base 比對，所以當 repo 端沒有該檔、但本地仍有時，pull 不會刪除本地檔案——這兩個檔案的刪除語意目前以 push 端為準。
 
 ### ❌ 不會同步的內容
 

@@ -315,7 +315,9 @@ Session start (new / resume / clear / compact)
 | `~/.claude/skills/` | `user-config/skills/` | Mirror sync |
 | `~/.claude/hooks/` | `user-config/hooks/` | Mirror sync |
 | `~/.claude/plugins/` (selective) | `global/plugin-data/` | CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
-| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists; removed from the repo on push if deleted locally |
+
+> **File-level deletions propagate from the push side.** Deleting `CLAUDE.md`, `settings.json`, or a file inside a mirror-synced dir (`commands/`, `rules/`, `agents/`, `skills/`, `hooks/`) locally and running `/sync-push` removes it from the repo too. Pulling on another machine will then remove it there as well for mirror-synced dirs. For `CLAUDE.md` and `settings.json` specifically, pull does not yet delete a file that's missing from the repo but still present locally (no 3-way base comparison on the import side yet) — push is the source of truth for those two files' deletions.
 
 ### ❌ What Does NOT Get Synced
 
