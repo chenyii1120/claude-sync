@@ -80,7 +80,7 @@ Two paths depending on your environment:
 
 Exports your local settings to the sync repo and pushes to remote.
 
-1. 📝 Reads `~/.claude/settings.json`, filters out blacklisted fields (`statusLine`), writes to `repo/global/settings.json`
+1. 📝 Reads `~/.claude/settings.json`, filters out blacklisted fields (`statusLine`), transforms absolute paths → `${CLAUDE_HOME}` placeholders (e.g. hook `command` strings), writes to `repo/global/settings.json`
 
 2. 🔌 Reads `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, transforms absolute paths → `${CLAUDE_HOME}` placeholders, writes to `repo/global/`
 
@@ -104,7 +104,7 @@ Pulls remote settings and applies them locally.
 
 3. 🔄 **Fetch + merge** — If merge conflicts occur, performs field-level JSON merge with remote preference
 
-4. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
+4. ⚙️ **Import settings** — Transforms `${CLAUDE_HOME}` placeholders back to this machine's absolute paths, then merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 
 5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs). Deletion here is **base-aware, not a mirror**: a local plugin-data file is only removed if it existed at the last-sync point and was explicitly deleted on the remote; a file you created locally after your last push/pull (e.g. a new blocklist entry or learned data) is preserved even if the pull is otherwise a clean overlay of remote content. With no base to compare against (first pull, or corrupted sync state), nothing is deleted and a note is added to the pull result's `warnings`.
 
@@ -310,7 +310,7 @@ Session start (new / resume / clear / compact)
 
 | Source | Destination in repo | Strategy |
 |--------|-------------------|----------|
-| `~/.claude/settings.json` | `global/settings.json` | Blacklist filter: all fields synced **except** `statusLine` |
+| `~/.claude/settings.json` | `global/settings.json` | Blacklist filter (all fields synced **except** `statusLine`) + absolute paths → `${CLAUDE_HOME}` placeholder |
 | `~/.claude/plugins/installed_plugins.json` | `global/installed_plugins.json` | Absolute paths → `${CLAUDE_HOME}` placeholder |
 | `~/.claude/plugins/known_marketplaces.json` | `global/known_marketplaces.json` | Same path transformation |
 | `~/.claude/commands/` | `user-config/commands/` | Mirror sync (adds, updates, and deletes) |
@@ -340,7 +340,7 @@ Session start (new / resume / clear / compact)
 
 ### 🔄 Path Transformation
 
-Plugin config files contain absolute paths that differ between machines. The sync engine handles this automatically:
+`settings.json` and plugin config files can contain absolute paths (e.g. a hook's `command` string) that differ between machines. The sync engine transforms them automatically, everywhere it reads or writes those files (export, import, and diff):
 
 **Push** (local → repo):
 
@@ -355,6 +355,10 @@ Plugin config files contain absolute paths that differ between machines. The syn
 ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 → /Users/bob/.claude/plugins/cache/superpowers/4.3.1
 ```
+
+> **Known limitation:** only paths under `CLAUDE_HOME` are transformed — a hook `command` that references another absolute path outside it (e.g. `$HOME/other-tool/bin/x` or a hardcoded `/opt/...` path) stays machine-specific and may break on another machine.
+>
+> **Migration note:** repos synced before this transformation was added to `settings.json` hold untransformed absolute paths; the first `/sync-push` after upgrading normalizes them to `${CLAUDE_HOME}` placeholders.
 
 ---
 
