@@ -108,9 +108,13 @@ Pulls remote settings and applies them locally.
 
 5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs)
 
-6. 📂 **Import commands / rules / agents / skills / hooks** — Mirror syncs from repo to local directories. Files deleted on the source machine are also removed locally. Changes to `rules/`, `skills/`, and `hooks/` are shown to the user with a confirmation prompt before applying (security measure — these may contain executable code)
+6. 📂 **Import commands / agents** — Mirror syncs non-executable user-config dirs from repo to local directories. Files deleted on the source machine are also removed locally.
 
-6. 🔧 **Auto plugin reinstallation** — Detects missing plugin installations and reinstalls them via `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones each parent marketplace on demand, so a separate `marketplace add` is only needed for marketplaces declared in `enabledPlugins` that have no plugins to trigger a side-effect clone.
+7. 🔐 **Two-stage confirm for `rules/` / `skills/` / `hooks/`** — These dirs can contain executable code (JS hooks, shell scripts, agent-followed instructions), so pull **never writes them to `~/.claude` directly**. A change there is returned as `pendingConfirmation`; `/sync-pull` shows you the full diff and asks you to confirm before `applyPendingDirs()` writes it (or `discardPendingDirs()` drops it). `last-sync` does not advance until you decide, so an abandoned/declined confirmation is safely re-offered on the next pull. This closes the gap where a compromised remote could drop a hook that auto-runs on your next session.
+
+8. 🚦 **Opt-in for unknown remote dirs** — A dir present in the repo but **not** in this machine's allow set (`DEFAULT_USER_CONFIG_DIRS` ∪ `allowSyncDirs` − `skipSyncDirs`) is **not** imported. It is returned as `unknownRemoteDirs`, and `/sync-pull` asks you to `add` (allow-list) or `skip` it before it can land locally — symmetric with the push side, so another machine (or a compromised repo) can't silently drop a new directory into your `~/.claude`.
+
+9. 🔧 **Auto plugin reinstallation** — Detects missing plugin installations and reinstalls them via `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones each parent marketplace on demand, so a separate `marketplace add` is only needed for marketplaces declared in `enabledPlugins` that have no plugins to trigger a side-effect clone.
 
    > This ensures a pull results in a **fully working setup**, not just config files without actual plugin code.
 

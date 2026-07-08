@@ -163,7 +163,9 @@ Always show the diff to the user before pulling. Each diff entry contains:
 
 1. **Always show diffs before pulling.** Never auto-apply remote settings without the user seeing what will change.
 
-2. **Rules require explicit confirmation.** If `/sync-pull` includes changes to `~/.claude/rules/`, show the full diff and ask the user to confirm before applying. This is a security measure against supply chain attacks.
+2. **Executable dirs use two-stage confirmation.** `pull()` NEVER writes `hooks/`, `skills/`, or `rules/` to `~/.claude` directly — a change there comes back in the result's `pendingConfirmation: [{ dir, changes: [...] }]` and `last-sync` is not advanced. Show the full diff for each pending dir, then call `applyPendingDirs([...approved dirs])` to write them (advances `last-sync`) or `discardPendingDirs()` to drop them (does not advance; re-offered next pull). This is a security measure against supply chain attacks — a compromised remote cannot auto-drop a hook that runs on the next session.
+
+2a. **Unknown remote dirs require opt-in.** A repo dir that is not in this machine's allow set comes back in the result's `unknownRemoteDirs` and is NOT imported. Ask the user to `addAllowSyncDir(dir)` (start syncing it) or `addSkipSyncDir(dir)` (never), then re-run `pull()` to import any newly allowed dirs.
 
 3. **Auto-reinstall missing plugins after pull.** After a successful pull, check for missing marketplaces and plugins:
 
@@ -219,7 +221,11 @@ All functions are available from `require('PLUGIN_ROOT/lib/sync-engine.js')`:
 | `isInitialized()` | Returns `true` if sync is set up |
 | `init(remoteUrl)` | Clone repo, export if empty, save config |
 | `push()` | Export local settings, commit, push (with retry) |
-| `pull()` | Backup, fetch, merge, import settings |
+| `pull()` | Backup, fetch, merge, import (defers `hooks/`/`skills/`/`rules/` as `pendingConfirmation`; surfaces `unknownRemoteDirs`) |
+| `applyPendingDirs([dirs])` | Write user-confirmed executable dirs, advance `last-sync`, clear pending state |
+| `discardPendingDirs()` | Drop deferred executable dirs without applying or advancing `last-sync` |
+| `getUnknownRemoteDirs()` | Repo dirs not in the local allow set (not imported until opted in) |
+| `addAllowSyncDir(dir)` / `addSkipSyncDir(dir)` | Opt a dir into / out of syncing |
 | `getStatus()` | Full status report (initialized, updates, changes) |
 | `diffSettings()` | JSON-level diff of settings fields |
 | `diffPluginConfigs()` | File-level diff of plugin configs |
