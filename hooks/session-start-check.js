@@ -7,23 +7,38 @@ const { execSync } = require('child_process');
 const SYNC_REPO = path.join(process.env.HOME, '.claude', 'sync', 'repo');
 const CONFIG_PATH = path.join(process.env.HOME, '.claude', 'sync', 'config.json');
 
+// C-02: config.branch may be absent (installs from before branch detection)
+// or, in principle, corrupted -- validate against a conservative charset
+// before splicing it into a fixed-string execSync command below. This value
+// comes from OUR OWN config.json (not user input), but the check keeps the
+// string-concat here safe and simple rather than sharp.
+const BRANCH_RE = /^[A-Za-z0-9._/-]+$/;
+
 try {
   // Exit silently if not initialized
   if (!fs.existsSync(SYNC_REPO) || !fs.existsSync(CONFIG_PATH)) process.exit(0);
 
+  let branch = 'main';
+  try {
+    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    if (config && typeof config.branch === 'string' && BRANCH_RE.test(config.branch)) {
+      branch = config.branch;
+    }
+  } catch {}
+
   // Fetch with 5s timeout
-  execSync('git fetch origin main', {
+  execSync(`git fetch origin ${branch}`, {
     cwd: SYNC_REPO,
     timeout: 5000,
     stdio: 'pipe',
   });
 
   // A-05: judge divergence from the actual commit counts, not just a hash
-  // mismatch -- HEAD != origin/main is also true when local is ahead
+  // mismatch -- HEAD != origin/<branch> is also true when local is ahead
   // (unpushed commits) with nothing new on the remote, which must NOT be
   // reported as "遠端有 0 個更新".
-  const behindCount = execSync('git rev-list HEAD..origin/main --count', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
-  const aheadCount = execSync('git rev-list origin/main..HEAD --count', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
+  const behindCount = execSync(`git rev-list HEAD..origin/${branch} --count`, { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
+  const aheadCount = execSync(`git rev-list origin/${branch}..HEAD --count`, { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
 
   const lines = [];
   if (Number(behindCount) > 0) {

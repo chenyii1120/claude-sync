@@ -74,6 +74,8 @@ Two paths depending on your environment:
 
 > 💡 **Second machine detection:** When you run `/sync-init` on a new machine pointing to a repo that already has data, it automatically recognizes this and offers to pull immediately — no extra steps.
 
+> 🌿 **Non-`main` default branches are supported:** `init()` detects the remote's actual default branch (e.g. `master`) and uses it for every subsequent push/pull/fetch — you don't need to rename anything.
+
 ---
 
 ### `/sync-push` — Export & push

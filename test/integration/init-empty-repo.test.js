@@ -28,7 +28,8 @@ test('init(): pushes local state as the initial commit when the remote repo is e
     assert.equal(engine.isInitialized(), true);
 
     const config = engine.loadConfig();
-    assert.deepEqual(config, { repo: remoteDir, autoPull: false, autoPush: false });
+    // C-02: config now also carries the detected default branch.
+    assert.deepEqual(config, { repo: remoteDir, branch: 'main', autoPull: false, autoPush: false });
 
     const lastSync = engine.loadLastSync();
     assert.equal(lastSync.action, 'init');

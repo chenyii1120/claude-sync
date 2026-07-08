@@ -74,6 +74,8 @@ claude plugin install /path/to/claude-sync
 
 > 💡 **第二台機器偵測：** 當你在新機器上執行 `/sync-init` 指向一個已有資料的 repo 時，會自動辨識並主動詢問是否要立即 pull — 不需要額外步驟。
 
+> 🌿 **支援非 `main` 的預設分支：** `init()` 會偵測遠端實際的預設分支（例如 `master`），並在之後所有的 push/pull/fetch 都使用該分支 — 不需要手動改名。
+
 ---
 
 ### `/sync-push` — 匯出並推送
