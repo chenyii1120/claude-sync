@@ -106,7 +106,7 @@ Pulls remote settings and applies them locally.
 
 4. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 
-5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs)
+5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs). Deletion here is **base-aware, not a mirror**: a local plugin-data file is only removed if it existed at the last-sync point and was explicitly deleted on the remote; a file you created locally after your last push/pull (e.g. a new blocklist entry or learned data) is preserved even if the pull is otherwise a clean overlay of remote content. With no base to compare against (first pull, or corrupted sync state), nothing is deleted and a note is added to the pull result's `warnings`.
 
 6. 📂 **Import commands / agents** — Mirror syncs non-executable user-config dirs from repo to local directories. Files deleted on the source machine are also removed locally.
 
@@ -318,10 +318,12 @@ Session start (new / resume / clear / compact)
 | `~/.claude/agents/` | `user-config/agents/` | Mirror sync |
 | `~/.claude/skills/` | `user-config/skills/` | Mirror sync |
 | `~/.claude/hooks/` | `user-config/hooks/` | Mirror sync |
-| `~/.claude/plugins/` (selective) | `global/plugin-data/` | CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
+| `~/.claude/plugins/` (selective) | `global/plugin-data/` | Base-aware import (not a mirror) — see below. CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
 | `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists; removed from the repo on push if deleted locally |
 
 > **File-level deletions propagate from the push side.** Deleting `CLAUDE.md`, `settings.json`, or a file inside a mirror-synced dir (`commands/`, `rules/`, `agents/`, `skills/`, `hooks/`) locally and running `/sync-push` removes it from the repo too. Pulling on another machine will then remove it there as well for mirror-synced dirs. For `CLAUDE.md` and `settings.json` specifically, pull does not yet delete a file that's missing from the repo but still present locally (no 3-way base comparison on the import side yet) — push is the source of truth for those two files' deletions.
+
+> **Plugin data is imported with base-aware (3-way) deletion, not a mirror.** A local file under `~/.claude/plugins/` is only deleted on pull if it existed at the last-sync base commit AND is now absent from the remote (an explicit remote deletion). Local-only plugin-data files — written after your last push/pull and never part of any synced base — are always preserved, even when a pull otherwise looks like a clean copy of the remote. This is deliberate: `getLocalDelta()` (the check safe pull uses to decide whether local has unpushed changes) excludes plugin-data to avoid false positives from machine-local plugin caches, so a mirror-style import would have silently deleted newer local plugin data with no warning. If no base commit is available (first pull, or corrupted sync state), nothing is deleted and a note is added to the pull result's `warnings` array.
 
 ### ❌ What Does NOT Get Synced
 

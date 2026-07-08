@@ -218,3 +218,125 @@ test('syncDirReportChanges: no-op when both src and dest do not exist', () => {
     rmDir(root);
   }
 });
+
+// A-03: the 5th `deleteSet` param turns off mirror-deletion. When provided,
+// a dest entry missing from src is deleted ONLY if its relative path is a
+// member of deleteSet -- everything else missing from src is left alone
+// (the non-mirror, base-aware semantics importPluginData() needs so a
+// locally-added file that was never part of the sync base survives a pull).
+
+test('syncDirReportChanges: with a deleteSet, a dest file missing from src IS deleted when its path is in the set', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    fs.mkdirSync(src, { recursive: true });
+    writeFile(path.join(dest, 'was-in-base.md'), 'stale');
+
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, new Set(['was-in-base.md']));
+
+    assert.deepEqual(changes, ['was-in-base.md']);
+    assert.equal(fs.existsSync(path.join(dest, 'was-in-base.md')), false);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('syncDirReportChanges: with a deleteSet, a dest file missing from src is PRESERVED when its path is NOT in the set', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    fs.mkdirSync(src, { recursive: true });
+    writeFile(path.join(dest, 'local-only.md'), 'never pushed');
+
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, new Set(['was-in-base.md']));
+
+    assert.deepEqual(changes, []);
+    assert.equal(fs.readFileSync(path.join(dest, 'local-only.md'), 'utf8'), 'never pushed');
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('syncDirReportChanges: an empty deleteSet preserves every dest entry missing from src', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    fs.mkdirSync(src, { recursive: true });
+    writeFile(path.join(dest, 'a.md'), 'a');
+    writeFile(path.join(dest, 'sub', 'b.md'), 'b');
+
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, new Set());
+
+    assert.deepEqual(changes, []);
+    assert.equal(fs.existsSync(path.join(dest, 'a.md')), true);
+    assert.equal(fs.existsSync(path.join(dest, 'sub', 'b.md')), true);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('syncDirReportChanges: with a deleteSet, a whole missing-from-src directory is pruned file-by-file, not wiped wholesale', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    fs.mkdirSync(src, { recursive: true });
+    // Whole 'myplugin' directory has no counterpart in src at all (e.g. the
+    // remote working tree no longer has ANY plugin-data for it).
+    writeFile(path.join(dest, 'myplugin', 'in-base.json'), 'was pushed before');
+    writeFile(path.join(dest, 'myplugin', 'local-only.json'), 'written locally after last push');
+
+    const deleteSet = new Set(['myplugin/in-base.json']);
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, deleteSet);
+
+    assert.deepEqual(changes, ['myplugin/in-base.json']);
+    assert.equal(fs.existsSync(path.join(dest, 'myplugin', 'in-base.json')), false);
+    assert.equal(fs.existsSync(path.join(dest, 'myplugin', 'local-only.json')), true);
+    // Directory itself must survive since it still has content.
+    assert.equal(fs.existsSync(path.join(dest, 'myplugin')), true);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('syncDirReportChanges: with a deleteSet, a directory left fully empty after pruning is removed', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    fs.mkdirSync(src, { recursive: true });
+    writeFile(path.join(dest, 'myplugin', 'in-base.json'), 'was pushed before');
+
+    const deleteSet = new Set(['myplugin/in-base.json']);
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, deleteSet);
+
+    assert.deepEqual(changes, ['myplugin/in-base.json']);
+    assert.equal(fs.existsSync(path.join(dest, 'myplugin')), false);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('syncDirReportChanges: a deleteSet does not affect additions/overwrites of content present in src', () => {
+  const root = mkTmpDir('claude-sync-syncdir-deleteset-');
+  try {
+    const src = path.join(root, 'src');
+    const dest = path.join(root, 'dest');
+    writeFile(path.join(src, 'updated.md'), 'new remote content');
+    writeFile(path.join(dest, 'updated.md'), 'old local content');
+    writeFile(path.join(src, 'added.md'), 'brand new from remote');
+
+    // deleteSet is empty (nothing should be deleted), but content that
+    // exists in src must still be copied/overwritten as normal.
+    const changes = syncDirReportChanges(src, dest, undefined, undefined, new Set());
+
+    assert.deepEqual(changes.sort(), ['added.md', 'updated.md']);
+    assert.equal(fs.readFileSync(path.join(dest, 'updated.md'), 'utf8'), 'new remote content');
+    assert.equal(fs.readFileSync(path.join(dest, 'added.md'), 'utf8'), 'brand new from remote');
+  } finally {
+    rmDir(root);
+  }
+});

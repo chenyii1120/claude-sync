@@ -106,7 +106,7 @@ claude plugin install /path/to/claude-sync
 
 4. ⚙️ **匯入設定** — 將遠端設定合併到本地 `settings.json`。黑名單欄位（如 `statusLine`）會從本地保留，永遠不會被覆蓋
 
-5. 🔌 **匯入插件設定 + 插件資料** — 將 `${CLAUDE_HOME}` 佔位符轉換回本地絕對路徑。匯入插件資料（`CLAUDE.md`、`blocklist.json`、`data/`、插件專屬目錄）
+5. 🔌 **匯入插件設定 + 插件資料** — 將 `${CLAUDE_HOME}` 佔位符轉換回本地絕對路徑。匯入插件資料（`CLAUDE.md`、`blocklist.json`、`data/`、插件專屬目錄）。這裡的刪除語意是**基於 base 的判斷，不是鏡像同步**：只有當某個本地插件資料檔案在上次同步的 base commit 存在、且遠端已明確刪除時，才會刪除本地檔案；上次 push/pull 之後才在本地新增的檔案（例如新的 blocklist 項目或學習資料）即使 pull 看起來像是遠端內容的乾淨覆蓋，也一律保留。若沒有可比對的 base（例如第一次 pull，或同步狀態損毀），則不會刪除任何檔案，並會在 pull 結果的 `warnings` 中加註說明。
 
 6. 📂 **匯入 commands / rules / agents / skills / hooks** — 從 repo 鏡像同步到本地目錄。在來源機器上刪除的檔案也會在本地移除。`rules/`、`skills/` 和 `hooks/` 的變更會先顯示給使用者確認後才套用（安全措施 — 這些目錄可能包含可執行程式碼）
 
@@ -316,10 +316,12 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 | `~/.claude/agents/` | `user-config/agents/` | 鏡像同步 |
 | `~/.claude/skills/` | `user-config/skills/` | 鏡像同步 |
 | `~/.claude/hooks/` | `user-config/hooks/` | 鏡像同步 |
-| `~/.claude/plugins/`（選擇性） | `global/plugin-data/` | CLAUDE.md、blocklist.json、data/、插件專屬目錄。排除 `cache/` 和 `marketplaces/`（自動重建） |
+| `~/.claude/plugins/`（選擇性） | `global/plugin-data/` | 基於 base 的匯入（非鏡像同步）——見下方說明。CLAUDE.md、blocklist.json、data/、插件專屬目錄。排除 `cache/` 和 `marketplaces/`（自動重建） |
 | `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製；本地刪除後，push 時也會從 repo 移除 |
 
 > **檔案級刪除以 push 端為準。** 本地刪除 `CLAUDE.md`、`settings.json`，或鏡像同步目錄（`commands/`、`rules/`、`agents/`、`skills/`、`hooks/`）內的檔案後執行 `/sync-push`，該檔案也會從 repo 移除。其他機器接著 pull 時，鏡像同步目錄會把該刪除同步過去。但 `CLAUDE.md` 和 `settings.json` 這兩個檔案目前 import 端還沒有做 3-way base 比對，所以當 repo 端沒有該檔、但本地仍有時，pull 不會刪除本地檔案——這兩個檔案的刪除語意目前以 push 端為準。
+
+> **插件資料的匯入採用基於 base 的（3-way）刪除判斷，不是鏡像同步。** `~/.claude/plugins/` 底下的本地檔案只有在「該檔案存在於上次同步的 base commit、且目前遠端已經沒有這個檔案（即遠端明確刪除）」時才會被刪除。上次 push/pull 之後才在本地新增、從未進入任何同步 base 的插件資料檔案，一律會被保留，即使這次 pull 看起來就像是遠端內容的乾淨複製也一樣。這是刻意設計：safe pull 用來判斷「本地是否有未推送變更」的 `getLocalDelta()` 刻意排除了 plugin-data（避免機器本地的插件快取造成誤判），如果匯入採用鏡像同步，就會在毫無提示的情況下把較新的本地插件資料刪除。若沒有可用的 base commit（第一次 pull，或同步狀態損毀），則不會刪除任何檔案，並會在 pull 結果的 `warnings` 陣列中加註說明。
 
 ### ❌ 不會同步的內容
 
