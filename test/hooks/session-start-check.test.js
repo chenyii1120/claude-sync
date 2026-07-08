@@ -90,6 +90,79 @@ test('session-start-check.js: reports the remote update count as SessionStart ho
   }
 });
 
+test('session-start-check.js: reports local-ahead hint (not a remote-update message) when local has unpushed commits', () => {
+  // A-05: a local commit that was never pushed makes HEAD != origin/main,
+  // but rev-list HEAD..origin/main --count is 0 -- the hook must not claim
+  // "遠端有 0 個更新" in that case, and should instead point at /sync-push.
+  const root = mkTmpDir('claude-sync-hook-start-ahead-');
+  try {
+    const remoteDir = initBareRepo(path.join(root, 'remote.git'));
+    const seed = cloneWithIdentity(remoteDir, path.join(root, 'seed'));
+    writeAndCommit(seed, 'global/settings.json', '{}', 'first');
+    git(seed, ['push', 'origin', 'main']);
+
+    const homeDir = path.join(root, 'home');
+    const { repoDir, configPath } = claudeSyncDirs(homeDir);
+    cloneWithIdentity(remoteDir, repoDir); // local sits at "first"
+
+    // Commit locally but never push it.
+    writeAndCommit(repoDir, 'global/settings.json', '{"a":1}', 'local-only, unpushed');
+
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({ repo: remoteDir }));
+
+    const result = runHook('hooks/session-start-check.js', homeDir);
+    assert.equal(result.status, 0);
+    assert.notEqual(result.stdout, '');
+
+    const parsed = JSON.parse(result.stdout);
+    const ctx = parsed.hookSpecificOutput.additionalContext;
+    assert.equal(parsed.hookSpecificOutput.hookEventName, 'SessionStart');
+    assert.doesNotMatch(ctx, /遠端有/);
+    assert.match(ctx, /本地有未推送的 commit/);
+    assert.match(ctx, /\/sync-push/);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('session-start-check.js: reports both the remote-update and local-ahead lines when diverged', () => {
+  const root = mkTmpDir('claude-sync-hook-start-diverged-');
+  try {
+    const remoteDir = initBareRepo(path.join(root, 'remote.git'));
+    const seed = cloneWithIdentity(remoteDir, path.join(root, 'seed'));
+    writeAndCommit(seed, 'global/settings.json', '{}', 'first');
+    git(seed, ['push', 'origin', 'main']);
+
+    const homeDir = path.join(root, 'home');
+    const { repoDir, configPath } = claudeSyncDirs(homeDir);
+    cloneWithIdentity(remoteDir, repoDir); // local sits at "first"
+
+    // Remote advances by one commit after the local clone was made.
+    writeAndCommit(seed, 'global/settings.json', '{"a":1}', 'second');
+    git(seed, ['push', 'origin', 'main']);
+
+    // Local advances independently, never pushed.
+    writeAndCommit(repoDir, 'global/other.json', '{}', 'local-only, unpushed');
+
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({ repo: remoteDir }));
+
+    const result = runHook('hooks/session-start-check.js', homeDir);
+    assert.equal(result.status, 0);
+    assert.notEqual(result.stdout, '');
+
+    const parsed = JSON.parse(result.stdout);
+    const ctx = parsed.hookSpecificOutput.additionalContext;
+    assert.match(ctx, /遠端有 1 個更新/);
+    assert.match(ctx, /本地有未推送的 commit/);
+    // Behind message reported before the ahead message.
+    assert.ok(ctx.indexOf('遠端有') < ctx.indexOf('本地有未推送的'));
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('session-start-check.js: fails silently (exit 0, no output) when sync/repo is not a valid git repo', () => {
   const homeDir = mkTmpDir('claude-sync-hook-start-corrupt-');
   try {

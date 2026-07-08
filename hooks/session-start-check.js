@@ -18,16 +18,25 @@ try {
     stdio: 'pipe',
   });
 
-  // Compare local vs remote
-  const local = execSync('git rev-parse HEAD', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
-  const remote = execSync('git rev-parse origin/main', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
+  // A-05: judge divergence from the actual commit counts, not just a hash
+  // mismatch -- HEAD != origin/main is also true when local is ahead
+  // (unpushed commits) with nothing new on the remote, which must NOT be
+  // reported as "遠端有 0 個更新".
+  const behindCount = execSync('git rev-list HEAD..origin/main --count', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
+  const aheadCount = execSync('git rev-list origin/main..HEAD --count', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
 
-  if (local !== remote) {
-    const count = execSync('git rev-list HEAD..origin/main --count', { cwd: SYNC_REPO, stdio: 'pipe' }).toString().trim();
+  const lines = [];
+  if (Number(behindCount) > 0) {
+    lines.push(`[claude-sync] 遠端有 ${behindCount} 個更新。執行 /sync-pull 來同步。`);
+  }
+  if (Number(aheadCount) > 0) {
+    lines.push('[claude-sync] 本地有未推送的 commit，執行 /sync-push 來同步。');
+  }
+  if (lines.length > 0) {
     const output = {
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: `[claude-sync] 遠端有 ${count} 個更新。執行 /sync-pull 來同步。`,
+        additionalContext: lines.join('\n'),
       },
     };
     process.stdout.write(JSON.stringify(output));
