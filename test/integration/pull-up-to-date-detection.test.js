@@ -98,7 +98,13 @@ test('pull(): a real remote change after an up-to-date pull is still reported as
     assert.equal(preCheck.reason, 'up-to-date');
 
     // Machine A makes a real change to a user-config file and pushes it.
-    fs.writeFileSync(path.join(homeA, 'rules', 'style.md'), '# style v2\n');
+    // NOTE: this uses a NON-executable dir (commands/) on purpose. rules/ is
+    // now a CONFIRM_REQUIRED_DIR (B-02): its changes are deferred to
+    // pendingConfirmation and NOT reported in configChanges by pull(). This
+    // guard is about change-detection through the normal import path, so it
+    // must exercise a dir that pull() still applies directly.
+    fs.mkdirSync(path.join(homeA, 'commands'), { recursive: true });
+    fs.writeFileSync(path.join(homeA, 'commands', 'hi.md'), '# hi v2\n');
     const pushA = engineA.push();
     assert.equal(pushA.pushed, true);
 
@@ -106,11 +112,13 @@ test('pull(): a real remote change after an up-to-date pull is still reported as
     // with the changed path listed in configChanges.
     const pullB3 = engineB.pull();
     assert.equal(pullB3.pulled, true);
-    assert.deepEqual(pullB3.configChanges, ['rules/style.md']);
+    assert.deepEqual(pullB3.configChanges, ['commands/hi.md']);
     assert.equal(
-      fs.readFileSync(path.join(homeB, 'rules', 'style.md'), 'utf8'),
-      '# style v2\n',
+      fs.readFileSync(path.join(homeB, 'commands', 'hi.md'), 'utf8'),
+      '# hi v2\n',
     );
+    // And rules/ (executable) must NOT have been auto-applied.
+    assert.deepEqual(pullB3.pendingConfirmation, []);
   } finally {
     rmDir(root);
   }
