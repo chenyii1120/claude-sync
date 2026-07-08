@@ -47,6 +47,35 @@ test('transformPathsForExport: escapes regex-special characters in CLAUDE_HOME',
   }
 });
 
+// A-04 review: PINS a documented, intentional trade-off -- do not "fix" this
+// without deliberately revisiting the placeholder convention. A user-typed
+// settings value containing the literal text `${CLAUDE_HOME}` collides with
+// claude-sync's path placeholder and IS rewritten to the machine's absolute
+// path on import (and the repo/base-side transforms in diffSettings /
+// getLocalDelta see the same rewrite). The controller judged the collision
+// too theoretical to warrant an escaping mechanism; it is documented as a
+// known limitation in README.md / README.zh-TW.md ("Path Transformation"
+// section: the literal text ${CLAUDE_HOME} is reserved). If this test starts
+// failing, the convention changed -- update the READMEs in the same commit.
+test('transformPathsForImport: rewrites a user-typed literal ${CLAUDE_HOME} string (documented reserved-text trade-off)', () => {
+  const claudeHome = mkTmpDir('claude-sync-transform-literal-');
+  try {
+    const engine = loadEngine(claudeHome);
+    const input = {
+      note: 'my docs live in ${CLAUDE_HOME}/docs',   // user-typed literal, NOT written by export
+      command: 'echo "${CLAUDE_HOME}"',
+    };
+    const imported = engine.transformPathsForImport(input);
+    assert.equal(imported.note, `my docs live in ${claudeHome}/docs`);
+    assert.equal(imported.command, `echo "${claudeHome}"`);
+    // And the collision is symmetric: export turns the now-absolute path back
+    // into the placeholder, so the literal text can never round-trip as-is.
+    assert.deepEqual(engine.transformPathsForExport(imported), input);
+  } finally {
+    rmDir(claudeHome);
+  }
+});
+
 test('transformPathsForImport: leaves input untouched when no placeholder is present', () => {
   const claudeHome = mkTmpDir('claude-sync-transform-noop-');
   try {

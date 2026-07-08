@@ -354,7 +354,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 → /Users/bob/.claude/plugins/cache/superpowers/4.3.1
 ```
 
-> **已知限制：** 只有 `CLAUDE_HOME` 底下的路徑會被轉換——若 hook 的 `command` 參照了 `CLAUDE_HOME` 之外的其他絕對路徑（例如 `$HOME/other-tool/bin/x` 或寫死的 `/opt/...` 路徑），該路徑仍是機器專屬的，同步到其他機器後可能失效。
+> **已知限制：** 只有 `CLAUDE_HOME` 底下的路徑會被轉換——若 hook 的 `command` 參照了 `CLAUDE_HOME` 之外的其他絕對路徑（例如 `$HOME/other-tool/bin/x` 或寫死的 `/opt/...` 路徑），該路徑仍是機器專屬的，同步到其他機器後可能失效。反過來說，`${CLAUDE_HOME}` 這段文字是本佔位符機制的保留字：settings 值中若包含這個字面字串，pull 時會被改寫成該機器的 `~/.claude` 絕對路徑，因此請勿在 settings 值中使用這段字面文字。
 >
 > **遷移說明：** 在此路徑轉換套用到 `settings.json` 之前就已同步的 repo，仍保留未轉換的絕對路徑；升級後第一次 `/sync-push` 會將其正規化為 `${CLAUDE_HOME}` 佔位符。
 

@@ -356,7 +356,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 → /Users/bob/.claude/plugins/cache/superpowers/4.3.1
 ```
 
-> **Known limitation:** only paths under `CLAUDE_HOME` are transformed — a hook `command` that references another absolute path outside it (e.g. `$HOME/other-tool/bin/x` or a hardcoded `/opt/...` path) stays machine-specific and may break on another machine.
+> **Known limitation:** only paths under `CLAUDE_HOME` are transformed — a hook `command` that references another absolute path outside it (e.g. `$HOME/other-tool/bin/x` or a hardcoded `/opt/...` path) stays machine-specific and may break on another machine. Conversely, the literal text `${CLAUDE_HOME}` is reserved by this placeholder convention: a settings value containing that exact string is rewritten to the machine's absolute `~/.claude` path on pull, so don't use it as literal text in settings values.
 >
 > **Migration note:** repos synced before this transformation was added to `settings.json` hold untransformed absolute paths; the first `/sync-push` after upgrading normalizes them to `${CLAUDE_HOME}` placeholders.
 
