@@ -159,3 +159,40 @@ test('diffPluginData(): shows a remote plugin-data change that has been fetched 
     rmDir(root);
   }
 });
+
+test('diffUserConfig(): discovers a brand-new remote user-config dir that has been fetched but not pulled (C-01 review fix)', () => {
+  const root = mkTmpDir('claude-sync-diff-newdir-');
+  try {
+    const remoteDir = initBareRepo(path.join(root, 'remote.git'));
+
+    const homeA = path.join(root, 'home-a');
+    seedFullHome(homeA, { settings: { theme: 'dark' }, ruleContent: '# style v1\n' });
+    const engineA = loadEngine(homeA);
+    engineA.init(remoteDir);
+
+    const homeB = path.join(root, 'home-b');
+    seedFullHome(homeB, { settings: { theme: 'dark' }, ruleContent: '# style v1\n' });
+    const engineB = loadEngine(homeB);
+    engineB.init(remoteDir);
+    engineB.pull();
+
+    assert.deepEqual(engineB.diffUserConfig(), []);
+
+    // A allow-lists a brand-new dir (NOT in DEFAULT_USER_CONFIG_DIRS and not
+    // existing on B in any form) and pushes it.
+    fs.mkdirSync(path.join(homeA, 'statusline'), { recursive: true });
+    fs.writeFileSync(path.join(homeA, 'statusline', 'foo.md'), '# foo\n');
+    engineA.addAllowSyncDir('statusline');
+    const pushA = engineA.push();
+    assert.equal(pushA.pushed, true);
+
+    // B fetches (NOT pull): the new dir exists only at origin/main -- it is
+    // in neither B's local ~/.claude nor B's repo clone's working tree, so
+    // dir discovery must come from the ref itself.
+    engineB.gitFetch();
+    const diffs = engineB.diffUserConfig();
+    assert.deepEqual(diffs, [{ dir: 'statusline', file: 'foo.md', status: 'remote-only' }]);
+  } finally {
+    rmDir(root);
+  }
+});
