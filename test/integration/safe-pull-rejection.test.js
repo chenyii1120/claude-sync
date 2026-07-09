@@ -42,7 +42,8 @@ test('pull(): safe mode refuses when local has unpushed changes; merge mode reco
     const safeResult = engineAReload.pull({ mode: 'safe' });
     assert.equal(safeResult.pulled, false);
     assert.equal(safeResult.reason, 'local-changes-pending');
-    assert.ok(safeResult.backupPath && fs.existsSync(safeResult.backupPath), 'safe pull must still take a backup before refusing');
+    // D-02: a refused safe pull imports nothing, so it must NOT take a backup.
+    assert.equal(safeResult.backupPath, null, 'a refused safe pull must not take a backup');
     assert.ok(safeResult.localDelta.settingsKeys.includes('theme'));
 
     // Local file must be untouched by the refused safe pull.
