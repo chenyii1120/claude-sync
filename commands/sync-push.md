@@ -39,6 +39,7 @@ Push the user's local Claude Code settings to their sync repo.
 4. **Report results:**
    - If `pushed: true` and no `mergeConflicts` (or empty): "Settings pushed successfully."
    - If `pushed: false, reason: 'no-changes'`: "No changes to push. Already up to date."
+   - If `pushed: false, reason: 'secrets-detected'`: go to step 6a — nothing was pushed yet.
    - If error: Show the error message and suggest troubleshooting.
 
 5. **Handle merge conflicts (if any):**
@@ -80,21 +81,36 @@ Push the user's local Claude Code settings to their sync repo.
    result is `{"pushed":false,"reason":"no-changes"}`, tell the user their
    choices already matched what was pushed — nothing more to do.
 
-6. **Warn about likely secrets (non-blocking).** If the push result's
-   `secretWarnings` array is non-empty, the push has ALREADY completed — this
-   is a heads-up, not a gate. List each flagged path (e.g. `env.OPENAI_API_KEY`)
-   and let the user decide what to do next:
+6a. **Secrets detected — PRE-push gate (`pushed: false, reason: 'secrets-detected'`).**
+   Nothing has been pushed yet — the scan now runs *before* commit/push, so this
+   is a gate, not a post-hoc warning. Present the flagged `secretWarnings` paths:
 
-   > 推送完成，但偵測到 settings.json 裡以下欄位疑似包含機敏資訊（例如 API 金鑰）：
+   > 推送已暫停：偵測到 `settings.json` 裡以下欄位疑似包含機敏資訊（例如 API 金鑰），
+   > 目前**尚未推送任何內容**到遠端：
    >
    > - `env.OPENAI_API_KEY`（名稱疑似機敏關鍵字 / 數值格式疑似 token）
+
+   Then use **AskUserQuestion** to ask how to proceed, offering:
+   - **推送（接受風險）** — 例如遠端是私有 repo，可接受此風險：re-invoke the engine with
+     explicit confirmation:
+     ```bash
+     node -e "const s=require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.push({ confirmSecrets: true })));"
+     ```
+     Then report the result as in step 4 (it will now be `pushed: true`).
+   - **取消** — do nothing further. Suggest the user remove or rotate the key in
+     `~/.claude/settings.json` first, then re-run `/sync-push` — since nothing was
+     pushed, there is no exposure to clean up yet.
+
+7. **Informational secret note on success (non-blocking).** If a `pushed: true`
+   result also carries a non-empty `secretWarnings` array (e.g. the user just chose
+   "push anyway" in step 6a, or confirmed via a prior call), let the user know as an
+   FYI — the push already completed:
+
+   > 推送完成。提醒：`settings.json` 裡以下欄位疑似包含機敏資訊，已依你的確認一併推送：
    >
-   > 這只是提醒，不會阻擋推送。你可以選擇：
-   > (a) 維持現狀 — 如果是私有 repo 且可接受此風險，不用做任何事。
-   > (b) 如果不希望這個值留在同步的 repo 裡：到 `~/.claude/settings.json` 移除或更換
-   >     （rotate）該金鑰，然後重新執行 `/sync-push`。
+   > - `env.OPENAI_API_KEY`
    >
-   > （目前尚未提供可設定的排除清單來永久排除特定 `env.*` 欄位，這是規劃中的後續功能；
-   > 現階段若要避免某個 key 被同步，需先從 settings.json 中移除。）
+   > 如果不希望這個值留在同步的 repo 裡：之後可以到 `~/.claude/settings.json` 移除或更換
+   > （rotate）該金鑰，再重新執行 `/sync-push`。
 
    If `secretWarnings` is missing or empty, skip this step silently.

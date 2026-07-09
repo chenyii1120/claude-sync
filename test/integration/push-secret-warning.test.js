@@ -1,9 +1,15 @@
 'use strict';
 
-// B-04 integration scenario: push() attaches secretWarnings (non-blocking)
-// on the pushed:true path when local settings.json's env looks like it
-// holds secrets, and reports an empty array when it doesn't. Mirrors
-// push-pull-roundtrip.test.js's single-machine push setup.
+// B-04 integration scenario: push() attaches secretWarnings when local
+// settings.json's env looks like it holds secrets, and reports an empty
+// array when it doesn't. Mirrors push-pull-roundtrip.test.js's
+// single-machine push setup.
+//
+// F#7: push() now GATES on a suspected secret unless the caller passes
+// confirmSecrets:true (see test/integration/push-secret-gate.test.js for the
+// gate/block scenarios). This file's "flagged" case therefore confirms the
+// secret up front so it still exercises "secretWarnings is populated on a
+// completed push" -- the informational-FYI behavior on the pushed:true path.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -32,7 +38,7 @@ test('push(): secretWarnings flags a likely-secret env entry on a real push', ()
       JSON.stringify({ theme: 'dark', env: { ANTHROPIC_API_KEY: 'sk-xxxx' } }, null, 2),
     );
 
-    const result = engine.push();
+    const result = engine.push({ confirmSecrets: true });
     assert.equal(result.pushed, true);
     assert.ok(Array.isArray(result.secretWarnings));
     assert.ok(result.secretWarnings.some((w) => w.path === 'env.ANTHROPIC_API_KEY'));

@@ -30,7 +30,13 @@ try {
     // Auto-push: push() handles export + lock + commit + push internally
     try {
       const result = syncEngine.push();
-      if (result.pushed) {
+      if (result.reason === 'secrets-detected') {
+        // F#7: push() gates on suspected secrets and does NOT auto-confirm --
+        // autoPush must respect the gate (non-interactive; the user confirms
+        // via a manual /sync-push).
+        const paths = (result.secretWarnings || []).map(w => w.path).join(', ');
+        process.stderr.write(`[claude-sync] ⚠️ 自動推送暫停：settings.json 疑似含 secret（${paths}）。請手動執行 /sync-push 確認後再推送。\n`);
+      } else if (result.pushed) {
         if (result.mergeWarnings && result.mergeWarnings.length > 0) {
           const files = result.mergeWarnings.map(w => w.file).join(', ');
           process.stderr.write(`[claude-sync] ⚠️ ${files} 無法解析為 JSON，已跳過欄位層級合併。\n`);
