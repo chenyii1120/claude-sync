@@ -79,3 +79,22 @@ Push the user's local Claude Code settings to their sync repo.
    Replace the JSON argv with the actual fields/values the user chose. If the
    result is `{"pushed":false,"reason":"no-changes"}`, tell the user their
    choices already matched what was pushed — nothing more to do.
+
+6. **Warn about likely secrets (non-blocking).** If the push result's
+   `secretWarnings` array is non-empty, the push has ALREADY completed — this
+   is a heads-up, not a gate. List each flagged path (e.g. `env.OPENAI_API_KEY`)
+   and let the user decide what to do next:
+
+   > 推送完成，但偵測到 settings.json 裡以下欄位疑似包含機敏資訊（例如 API 金鑰）：
+   >
+   > - `env.OPENAI_API_KEY`（名稱疑似機敏關鍵字 / 數值格式疑似 token）
+   >
+   > 這只是提醒，不會阻擋推送。你可以選擇：
+   > (a) 維持現狀 — 如果是私有 repo 且可接受此風險，不用做任何事。
+   > (b) 如果不希望這個值留在同步的 repo 裡：到 `~/.claude/settings.json` 移除或更換
+   >     （rotate）該金鑰，然後重新執行 `/sync-push`。
+   >
+   > （目前尚未提供可設定的排除清單來永久排除特定 `env.*` 欄位，這是規劃中的後續功能；
+   > 現階段若要避免某個 key 被同步，需先從 settings.json 中移除。）
+
+   If `secretWarnings` is missing or empty, skip this step silently.
