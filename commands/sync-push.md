@@ -61,19 +61,21 @@ Push the user's local Claude Code settings to their sync repo.
    >
    > 要改用遠端的值嗎？可以選擇全部改用遠端、或指定個別欄位。
 
-   If user wants to change some values:
+   If user wants to change some values, build a JSON object with one entry per
+   field the user chose to change: key = the conflict's `key` exactly as it
+   appeared in `mergeConflicts` (including dot-paths for nested fields, e.g.
+   `env.API_KEY`), value = the chosen value (typically the remote value from
+   the table, but the user may type something else). Pass that object as a
+   single JSON argv to `resolvePushConflicts`, which applies it to the repo's
+   settings.json (setting dot-paths correctly), commits, pushes, and advances
+   last-sync so the next status/preview doesn't falsely report "remote has
+   updates":
    ```bash
    node -e "
      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
-     // Read current repo settings, apply user's chosen values, write back
-     const fp = require('path').join(s.REPO_DIR, 'global', 'settings.json');
-     const data = JSON.parse(require('fs').readFileSync(fp, 'utf8'));
-     data.FIELD_NAME = CHOSEN_VALUE;  // repeat for each field user wants to change
-     require('fs').writeFileSync(fp, JSON.stringify(data, null, 2));
-     s.gitExec('add -A');
-     s.gitExec('commit -m \"resolve merge conflicts\"');
-     s.gitExec('push origin ' + s.getBranch());
-     console.log('done');
-   "
+     console.log(JSON.stringify(s.resolvePushConflicts(JSON.parse(process.argv[1]))));
+   " '{"theme":"light","env.API_KEY":"key-xyz"}'
    ```
-   Replace FIELD_NAME and CHOSEN_VALUE with the actual field and value the user chose.
+   Replace the JSON argv with the actual fields/values the user chose. If the
+   result is `{"pushed":false,"reason":"no-changes"}`, tell the user their
+   choices already matched what was pushed — nothing more to do.
