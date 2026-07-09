@@ -13,13 +13,13 @@ const path = require('node:path');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
-function runHook(hookRelPath, homeDir, extraEnv = {}) {
+function runHook(hookRelPath, homeDir, extraEnv = {}, options = {}) {
   const env = { ...process.env, ...extraEnv, HOME: homeDir };
   delete env.CLAUDE_SYNC_HOME;
   return spawnSync(process.execPath, [path.join(REPO_ROOT, hookRelPath)], {
     env,
     encoding: 'utf8',
-    timeout: 15000,
+    timeout: options.timeoutMs || 15000,
   });
 }
 
