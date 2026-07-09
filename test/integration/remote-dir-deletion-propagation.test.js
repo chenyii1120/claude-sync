@@ -107,3 +107,74 @@ test('F#4: a B-local-only addition to the deleted dir survives the prune (only b
     rmDir(root);
   }
 });
+
+// F#4 review follow-up (Codex): hooks/ is a CONFIRM_REQUIRED_DIR (executable).
+// getLocalDelta (the safe-pull divergence check) and pull's main import both SKIP
+// exec dirs on purpose -- they flow ONLY through content-based
+// pendingConfirmation, never the automatic delta/import path. But the base-aware
+// prune's allow-list still included them, so a SAFE pull silently DELETED an
+// UNPUSHED local edit to an exec-dir file when the remote deleted the whole dir
+// (the delta check is blind to exec dirs, so the pull is never refused). The prune
+// must therefore never touch CONFIRM_REQUIRED_DIRS.
+
+// Two machines converged on a repo whose hooks/ (an exec dir) has one file. B
+// first-pulls (which DEFERS the exec dir under pendingConfirmation) then applies
+// it, so both machines share hooks/foo.sh AND a last-sync base that contains it.
+function twoConvergedHomesWithHooks(root) {
+  const remoteDir = initBareRepo(path.join(root, 'remote.git'));
+
+  const homeA = path.join(root, 'home-a');
+  fs.mkdirSync(homeA, { recursive: true });
+  writeJson(path.join(homeA, 'settings.json'), { theme: 'dark' });
+  fs.mkdirSync(path.join(homeA, 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(homeA, 'hooks', 'foo.sh'), '#original\n');
+  const engineA = loadEngine(homeA);
+  engineA.init(remoteDir);
+
+  const homeB = path.join(root, 'home-b');
+  fs.mkdirSync(homeB, { recursive: true });
+  writeJson(path.join(homeB, 'settings.json'), { theme: 'dark' });
+  const engineB = loadEngine(homeB);
+  engineB.init(remoteDir);
+  // First pull DEFERS the exec dir; apply it so B has hooks/foo.sh locally and
+  // advances last-sync to the commit that contains it (the prune's base).
+  const firstPull = engineB.pull();
+  assert.equal(firstPull.pendingConfirmation.some(p => p.dir === 'hooks'), true);
+  engineB.applyPendingDirs(['hooks']);
+
+  return { remoteDir, homeA, engineA, homeB, engineB };
+}
+
+test('F#4: a safe pull must NOT prune an UNPUSHED local edit to an exec dir the remote deleted wholesale', () => {
+  const root = mkTmpDir('claude-sync-f4-exec-dir-');
+  try {
+    const { homeA, engineA, homeB, engineB } = twoConvergedHomesWithHooks(root);
+
+    // Sanity: B has the applied exec-dir file from the converge step.
+    const hookB = path.join(homeB, 'hooks', 'foo.sh');
+    assert.equal(fs.existsSync(hookB), true);
+
+    // B makes an UNPUSHED local edit to the exec-dir file.
+    fs.writeFileSync(hookB, '#B-LOCAL-EDIT\n');
+
+    // A deletes the ONLY file in hooks/ and pushes -> git drops the whole dir.
+    fs.rmSync(path.join(homeA, 'hooks', 'foo.sh'));
+    assert.equal(engineA.push().pushed, true);
+
+    // B pulls in safe mode. getLocalDelta is blind to exec dirs, so this is NOT
+    // refused as local-changes-pending -- exactly the window in which the prune
+    // must not delete B's edited file.
+    const pullB = engineB.pull({ mode: 'safe' });
+    assert.notEqual(pullB.reason, 'local-changes-pending');
+
+    // B's unpushed exec-dir edit must SURVIVE (before the fix the prune deleted it).
+    assert.equal(
+      fs.existsSync(hookB),
+      true,
+      'a safe pull must never prune an unpushed local edit to an executable dir',
+    );
+    assert.equal(fs.readFileSync(hookB, 'utf8'), '#B-LOCAL-EDIT\n');
+  } finally {
+    rmDir(root);
+  }
+});
