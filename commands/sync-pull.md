@@ -184,10 +184,13 @@ these steps exactly and in order.
    "
    ```
 
-   - **Missing plugins (reinstall first):** For each plugin, run:
+   - **Missing plugins (reinstall first):** Each entry in `missingPlugins` is
+     already a full `plugin@marketplace` identifier (e.g.
+     `superpowers@claude-plugins-official`). For each one, pass it VERBATIM:
      ```bash
-     claude plugin install <plugin>@<marketplace>
+     claude plugin install <missingPlugins entry>
      ```
+     Do NOT split it or append a marketplace — it is already complete.
      `claude plugin install` will automatically clone the parent marketplace if it's not yet on disk, so you do **not** need to run `marketplace add` separately for marketplaces that have at least one plugin to install.
    - **Missing marketplaces with no plugins to install:** After plugin installs, re-run the detect step. For any marketplace still missing (i.e., declared but no enabled plugins from it), run:
      ```bash

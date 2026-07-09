@@ -34,6 +34,6 @@ Help the user restore settings from a backup.
    "
    ```
 
-   - **Missing plugins (reinstall first):** For each plugin, run `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones the parent marketplace as needed, so explicit `marketplace add` is unnecessary for any marketplace with at least one plugin to install.
+   - **Missing plugins (reinstall first):** Each entry in `missingPlugins` is already a full `plugin@marketplace` identifier (e.g. `superpowers@claude-plugins-official`). For each one, run `claude plugin install <entry>` VERBATIM — do NOT split it or append a marketplace, it is already complete. The CLI auto-clones the parent marketplace as needed, so explicit `marketplace add` is unnecessary for any marketplace with at least one plugin to install.
    - **Missing marketplaces with no plugins:** After plugin installs, any marketplace still missing (no enabled plugins from it) can be added with `claude plugin marketplace add <owner>/<repo>` (e.g. `claude plugin marketplace add anthropics/claude-plugins-official`). **Do NOT** use the `github:owner/repo` form — recent CLI rejects it.
    - Report to the user what was reinstalled.
