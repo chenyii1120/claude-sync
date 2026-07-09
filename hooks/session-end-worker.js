@@ -40,12 +40,10 @@ try {
       process.stderr.write(`[claude-sync] ⚠️ 自動推送失敗：${e.message}\n`);
     }
   } else {
-    // Best-effort check: export to see if there are local changes, then revert
+    // Best-effort local-change check (read-only, under lock, scoped clean).
     try {
-      syncEngine.exportAll();
-      const hasChanges = syncEngine.hasLocalChanges();
-      try { syncEngine.gitExec('checkout -- .'); } catch {}
-      if (hasChanges) {
+      const probe = syncEngine.computeLocalChanges();
+      if (probe.localChanges) {
         process.stderr.write('[claude-sync] 📌 本地有未推送的變更。執行 /sync-push 來同步。\n');
       }
     } catch {}
