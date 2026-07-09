@@ -10,8 +10,14 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-const CONFIG_PATH = path.join(os.homedir(), '.claude', 'sync', 'config.json');
-const REPO_DIR = path.join(os.homedir(), '.claude', 'sync', 'repo');
+// F#8: match the launcher's (session-end-check.js) CLAUDE_SYNC_HOME-aware
+// base so this preflight guard checks the same REPO_DIR/CONFIG_PATH the
+// engine itself will use -- otherwise, under CLAUDE_SYNC_HOME, this guard
+// checks the wrong path and exits before ever reaching the engine, silently
+// skipping auto-push.
+const CLAUDE_HOME = process.env.CLAUDE_SYNC_HOME || path.join(os.homedir(), '.claude');
+const CONFIG_PATH = path.join(CLAUDE_HOME, 'sync', 'config.json');
+const REPO_DIR = path.join(CLAUDE_HOME, 'sync', 'repo');
 
 try {
   if (!fs.existsSync(REPO_DIR) || !fs.existsSync(CONFIG_PATH)) process.exit(0);
