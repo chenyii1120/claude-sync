@@ -72,7 +72,7 @@ Push the user's local Claude Code settings to their sync repo.
      require('fs').writeFileSync(fp, JSON.stringify(data, null, 2));
      s.gitExec('add -A');
      s.gitExec('commit -m \"resolve merge conflicts\"');
-     s.gitExec('push origin main');
+     s.gitExec('push origin ' + s.getBranch());
      console.log('done');
    "
    ```

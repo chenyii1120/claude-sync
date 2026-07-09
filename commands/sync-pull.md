@@ -88,7 +88,7 @@ these steps exactly and in order.
      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
      for (const dir of s.getUnknownRemoteDirs()) {
        console.log('=== ' + dir + ' ===');
-       for (const f of s.listFilesAtRef('origin/main', 'user-config/' + dir)) console.log('  ' + f);
+       for (const f of s.listFilesAtRef('origin/' + s.getBranch(), 'user-config/' + dir)) console.log('  ' + f);
      }
    "
    ```
