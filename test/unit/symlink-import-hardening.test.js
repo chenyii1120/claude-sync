@@ -10,20 +10,33 @@
 // into CLAUDE_HOME as a regular file, and the next push exported+uploaded
 // it -- arbitrary local-file exfiltration to a shared remote.
 //
-// This file covers the five remaining sites hardened by that fix:
+// This file covers the five directory-walker sites hardened by that fix:
 //   1. syncDirReportChanges() -- both readdir loops (additions is the
 //      exfiltration-critical one; deletions mirrors removeStalePaths).
 //   2. computeDirChanges() -- the read-only preview twin, kept consistent.
 //   3. pruneByDeleteSet() -- statSync -> lstatSync so a dest symlink-to-dir
 //      is a leaf, never a recursion point.
 //   4/5. exportPluginData() / createBackup() -- top-level plugin-data walk.
+//
+// F#1 review (reviewer found a 6th reachable path, CRITICAL): the three
+// FIXED-NAME repo files read directly on import -- bypassing the walkers above
+// -- were still followed if symlinked. isRepoSymlink() now guards them:
+//   6. importUserConfig() CLAUDE.md copy (CRITICAL exfiltration path).
+//   7. importSettings() repo settings.json read.
+//   8. importPluginConfigs() repo config JSON reads.
+// The EXPORT side (local -> repo) deliberately still follows local symlinks --
+// pointing ~/.claude/settings.json or CLAUDE.md at a dotfiles repo is a
+// legitimate, common setup -- so the reverse guard test asserts export is
+// unaffected.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { syncDirReportChanges, computeDirChanges } = require('../../lib/sync-engine.js');
+const {
+  syncDirReportChanges, computeDirChanges, isRepoSymlink,
+} = require('../../lib/sync-engine.js');
 const { loadEngine } = require('../helpers/load-engine.js');
 const { mkTmpDir, rmDir } = require('../helpers/tmp.js');
 const { seedMinimalHome } = require('../helpers/claude-home.js');
@@ -287,6 +300,142 @@ test('exportPluginData / createBackup: a top-level plugins/ symlink is skipped (
       '{}',
     );
     assert.ok(backupWarnings.some(w => /skipping symlink/.test(w) && w.includes('leak-link')));
+  } finally {
+    rmDir(root);
+  }
+});
+
+// --- 6. importUserConfig: CLAUDE.md symlink (CRITICAL exfiltration path) ---
+
+test('isRepoSymlink: true for an existing symlink, false for a regular file and a non-existent path (F#1 review)', (t) => {
+  const root = mkTmpDir('claude-sync-f1r-helper-');
+  try {
+    fs.writeFileSync(path.join(root, 'regular.txt'), 'x');
+    const ok = trySymlink(path.join(root, 'regular.txt'), path.join(root, 'link.txt'));
+    if (!ok) {
+      t.skip('platform does not allow creating symlinks');
+      return;
+    }
+    assert.equal(isRepoSymlink(path.join(root, 'link.txt')), true);
+    assert.equal(isRepoSymlink(path.join(root, 'regular.txt')), false);
+    assert.equal(isRepoSymlink(path.join(root, 'does-not-exist.txt')), false);
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('importUserConfig: a symlinked repo user-config/CLAUDE.md is refused -- its target content is NOT copied into ~/.claude/CLAUDE.md, and a warning is emitted (F#1 review CRITICAL)', (t) => {
+  const root = mkTmpDir('claude-sync-f1r-claudemd-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    seedMinimalHome(claudeHome);
+
+    const secretFile = path.join(root, 'id_rsa');
+    fs.writeFileSync(secretFile, 'PRIVATE-KEY-SECRET-CONTENT');
+
+    // Plant the malicious symlink in the repo's user-config/ (what a remote
+    // pull would have reset into place before importUserConfig() runs).
+    const repoUserConfig = path.join(claudeHome, 'sync', 'repo', 'user-config');
+    fs.mkdirSync(repoUserConfig, { recursive: true });
+    const ok = trySymlink(secretFile, path.join(repoUserConfig, 'CLAUDE.md'));
+    if (!ok) {
+      t.skip('platform does not allow creating symlinks');
+      return;
+    }
+
+    const engine = loadEngine(claudeHome);
+    let changes;
+    const warnings = captureWarnings(() => {
+      changes = engine.importUserConfig();
+    });
+
+    const destClaudeMd = path.join(claudeHome, 'CLAUDE.md');
+    // The link was refused -- nothing written to ~/.claude/CLAUDE.md at all,
+    // and (critically) the secret's bytes were never read/copied.
+    assert.equal(fs.existsSync(destClaudeMd), false);
+    assert.equal(changes.includes('CLAUDE.md'), false);
+    assert.ok(warnings.some(w => /refusing to import symlinked repo file/.test(w) && w.includes('CLAUDE.md')));
+  } finally {
+    rmDir(root);
+  }
+});
+
+// --- 7. importSettings: repo settings.json symlink -------------------------
+
+test('importSettings: a symlinked repo global/settings.json is refused (not followed) -- treated as no remote settings, no throw, and a warning is emitted (F#1 review)', (t) => {
+  const root = mkTmpDir('claude-sync-f1r-settings-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    seedMinimalHome(claudeHome, { theme: 'light', local: 'kept' });
+
+    // A legitimate-looking JSON file elsewhere on disk that the symlink
+    // points at -- following it would read `evil` into settings.
+    const evilJson = path.join(root, 'evil.json');
+    fs.writeFileSync(evilJson, JSON.stringify({ evil: 'injected-from-symlink-target' }));
+
+    const repoGlobal = path.join(claudeHome, 'sync', 'repo', 'global');
+    fs.mkdirSync(repoGlobal, { recursive: true });
+    const ok = trySymlink(evilJson, path.join(repoGlobal, 'settings.json'));
+    if (!ok) {
+      t.skip('platform does not allow creating symlinks');
+      return;
+    }
+
+    const engine = loadEngine(claudeHome);
+    let result;
+    const warnings = captureWarnings(() => {
+      assert.doesNotThrow(() => {
+        result = engine.importSettings();
+      });
+    });
+
+    // Remote treated as absent: nothing changed, no throw.
+    assert.equal(result.changed, false);
+    // Local settings.json untouched -- the symlink target's `evil` key was
+    // never merged in.
+    const localSettings = JSON.parse(fs.readFileSync(path.join(claudeHome, 'settings.json'), 'utf8'));
+    assert.equal('evil' in localSettings, false);
+    assert.deepEqual(localSettings, { theme: 'light', local: 'kept' });
+    assert.ok(warnings.some(w => /refusing to import symlinked repo file/.test(w) && w.includes('settings.json')));
+  } finally {
+    rmDir(root);
+  }
+});
+
+// --- Reverse guard: EXPORT side deliberately still follows local symlinks --
+//
+// dotfiles users routinely symlink ~/.claude/settings.json (and CLAUDE.md) at
+// a checked-in dotfiles repo. Export reads the LOCAL file to push its content,
+// and following that symlink is the CORRECT, intended behaviour -- the F#1
+// review guard is import-side only and must NOT regress this.
+
+test('exportSettings: a LOCAL ~/.claude/settings.json symlink pointing at a legit JSON file is still followed and its content pushed (export side intentionally unguarded) (F#1 review)', (t) => {
+  const root = mkTmpDir('claude-sync-f1r-export-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    fs.mkdirSync(claudeHome, { recursive: true });
+
+    // The user's real settings live in their dotfiles repo; ~/.claude/settings.json
+    // is a symlink to it -- a legitimate, common setup.
+    const dotfilesSettings = path.join(root, 'dotfiles', 'settings.json');
+    fs.mkdirSync(path.dirname(dotfilesSettings), { recursive: true });
+    fs.writeFileSync(dotfilesSettings, JSON.stringify({ theme: 'dark', fromDotfiles: true }));
+    const ok = trySymlink(dotfilesSettings, path.join(claudeHome, 'settings.json'));
+    if (!ok) {
+      t.skip('platform does not allow creating symlinks');
+      return;
+    }
+
+    const engine = loadEngine(claudeHome);
+    assert.doesNotThrow(() => engine.exportSettings());
+
+    // Export followed the local symlink and pushed the target's content --
+    // the dotfiles setup is NOT broken by the import-side guard.
+    const repoSettings = path.join(engine.REPO_DIR, 'global', 'settings.json');
+    assert.equal(fs.existsSync(repoSettings), true);
+    const exported = JSON.parse(fs.readFileSync(repoSettings, 'utf8'));
+    assert.equal(exported.fromDotfiles, true);
+    assert.equal(exported.theme, 'dark');
   } finally {
     rmDir(root);
   }
