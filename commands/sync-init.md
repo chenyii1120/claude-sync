@@ -56,12 +56,12 @@ Help the user initialize claude-sync. Follow these steps:
    > 偵測到 `~/.claude/<dir>/` 不在已知同步清單中。
    > 同步嗎？(a) 加入同步 / (s) 永久跳過 / (l) 之後再決定
 
-   Persist the answer:
+   Persist the answer (pass the dir name as argv[1], never interpolate it into the JS string):
    ```bash
    # add → allow list
-   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addAllowSyncDir('<dir>')"
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addAllowSyncDir(process.argv[1])" '<dir>'
    # skip → skip list (won't ask again)
-   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addSkipSyncDir('<dir>')"
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').addSkipSyncDir(process.argv[1])" '<dir>'
    # later → no change; will be re-prompted next /sync-init or /sync-push
    ```
 
