@@ -2,9 +2,9 @@
 
 // F-01 hook smoke tests: run hooks/session-start-check.js as a real
 // subprocess and check its stdout contract + silent-failure behavior.
-// These hooks still read process.env.HOME directly (C-08 refactor for the
-// hooks themselves is a later task) so setup here manipulates HOME, not
-// CLAUDE_SYNC_HOME.
+// This hook resolves its home directory via os.homedir()/CLAUDE_SYNC_HOME
+// (C-08), and os.homedir() reads $HOME on POSIX, so setup here manipulates
+// HOME to isolate the test.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

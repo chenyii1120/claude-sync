@@ -4,10 +4,11 @@
 // subprocess. Setup goes through the real sync-engine (via loadEngine(),
 // which sets CLAUDE_SYNC_HOME in *this* process) so the on-disk state is
 // realistic, then the hook itself is spawned with HOME pointed at the
-// parent of that same `.claude` dir — the hook computes its own paths as
-// path.join(HOME, '.claude', ...) (it still reads process.env.HOME
-// directly; see C-08 note in session-start-check.test.js), so the fixture
-// dir must literally be named `.claude` for the two to line up.
+// parent of that same `.claude` dir — the hook (a thin launcher as of C-05)
+// resolves its home directory via os.homedir()/CLAUDE_SYNC_HOME (C-08) as
+// path.join(homedir, '.claude', ...), and os.homedir() reads $HOME on
+// POSIX, so the fixture dir must literally be named `.claude` for the two
+// to line up.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

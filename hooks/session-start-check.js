@@ -1,11 +1,13 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const SYNC_REPO = path.join(process.env.HOME, '.claude', 'sync', 'repo');
-const CONFIG_PATH = path.join(process.env.HOME, '.claude', 'sync', 'config.json');
+const CLAUDE_HOME = process.env.CLAUDE_SYNC_HOME || path.join(os.homedir(), '.claude');
+const SYNC_REPO = path.join(CLAUDE_HOME, 'sync', 'repo');
+const CONFIG_PATH = path.join(CLAUDE_HOME, 'sync', 'config.json');
 
 // C-02: config.branch may be absent (installs from before branch detection)
 // or, in principle, corrupted -- validate against a conservative charset

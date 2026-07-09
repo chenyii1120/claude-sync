@@ -1,12 +1,12 @@
 'use strict';
 
 // Runs one of the hooks/*.js scripts as a real child process, the way
-// Claude Code itself invokes them. Both hooks currently read
-// process.env.HOME directly (not CLAUDE_SYNC_HOME — that refactor is out of
-// scope for F-01/C-08), so we point HOME at an isolated tmpdir for the
-// child and strip CLAUDE_SYNC_HOME so it can't leak in from a parent test
-// that used loadEngine() and leave the child resolving a different path
-// than the fixture it was given.
+// Claude Code itself invokes them. Hooks resolve their home directory via
+// os.homedir() (falling back from CLAUDE_SYNC_HOME when set) — os.homedir()
+// reads $HOME on POSIX, so pointing HOME at an isolated tmpdir for the child
+// isolates it correctly. We also strip CLAUDE_SYNC_HOME so it can't leak in
+// from a parent test that used loadEngine() and leave the child resolving a
+// different path than the fixture it was given.
 
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
