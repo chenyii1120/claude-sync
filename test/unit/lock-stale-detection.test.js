@@ -44,6 +44,13 @@ test('acquireLock(): reclaims a lock held by a dead pid', () => {
     );
     assert.equal(meta.pid, process.pid);
     assert.equal(typeof meta.startedAt, 'number');
+
+    // The atomic-rename reclaim path renames the stale lock to a
+    // `.sync.lock.stale-<pid>` sidecar before rmSync'ing it; prove that
+    // temporary dir was cleaned up and left no residue in SYNC_DIR.
+    const staleResidue = fs.readdirSync(engine.SYNC_DIR)
+      .filter(name => name.startsWith('.sync.lock.stale-'));
+    assert.deepEqual(staleResidue, []);
   } finally {
     engine.releaseLock();
     rmDir(root);
