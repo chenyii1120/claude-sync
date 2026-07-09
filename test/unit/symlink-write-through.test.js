@@ -100,3 +100,52 @@ test('exportPluginConfigs: a symlink planted at REPO_DIR/global/installed_plugin
     rmDir(root);
   }
 });
+
+test('exportPluginData: a symlink planted at REPO_DIR/global/plugin-data/<name> (a DIR entry) is neutralized -- no write-through into the link target and the dest becomes a real directory (F#9 review)', (t) => {
+  const root = mkTmpDir('claude-sync-f9-plugindata-dir-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    seedMinimalHome(claudeHome, { theme: 'dark' });
+
+    // Local plugin-data DIRECTORY that export copies (a dir entry -> copyDirSync
+    // branch). The name is NOT in PLUGIN_DATA_EXCLUDE, so it IS exported.
+    const pluginName = 'some-plugin';
+    const srcDir = path.join(claudeHome, 'plugins', pluginName);
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(path.join(srcDir, 'data.json'), '{"exported":true}');
+
+    // External "victim" directory with a known file the attacker's symlink targets.
+    const victimDir = path.join(root, 'victim');
+    fs.mkdirSync(victimDir, { recursive: true });
+    fs.writeFileSync(path.join(victimDir, 'secret.txt'), 'VICTIM-ORIGINAL-CONTENT');
+
+    // Plant a symlink at the managed dest dir root (what `reset --hard` on a
+    // malicious remote commit would materialize before export runs). removeStalePaths
+    // leaves dest symlinks in place, and copyDirSync's symlink skip is SOURCE-side
+    // only -- so without the fix the export writes THROUGH the link into victimDir.
+    const outDir = path.join(claudeHome, 'sync', 'repo', 'global', 'plugin-data');
+    fs.mkdirSync(outDir, { recursive: true });
+    const destPath = path.join(outDir, pluginName);
+    const ok = trySymlink(victimDir, destPath);
+    if (!ok) {
+      t.skip('platform does not allow creating symlinks');
+      return;
+    }
+
+    const engine = loadEngine(claudeHome);
+    engine.exportPluginData();
+
+    // (a) No write-through: the victim dir's file is unchanged and NO exported
+    // plugin-data file leaked into the symlink target directory.
+    assert.equal(fs.readFileSync(path.join(victimDir, 'secret.txt'), 'utf8'), 'VICTIM-ORIGINAL-CONTENT', 'export must not write through the planted dir symlink to its target');
+    assert.equal(fs.existsSync(path.join(victimDir, 'data.json')), false, 'no plugin-data file may leak into the symlink target directory');
+
+    // (b) The managed dest is now a REAL directory holding the exported file
+    // (the link was unlinked -- only the link, not its target).
+    assert.equal(fs.lstatSync(destPath).isSymbolicLink(), false, 'the dest dir root must be a real directory, not the planted symlink');
+    assert.equal(fs.statSync(destPath).isDirectory(), true);
+    assert.equal(fs.readFileSync(path.join(destPath, 'data.json'), 'utf8'), '{"exported":true}');
+  } finally {
+    rmDir(root);
+  }
+});
