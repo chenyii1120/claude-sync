@@ -1,28 +1,18 @@
 # 已知問題清單
 
+> 完整的問題清單與修正計畫見 [docs/issues-and-fix-plan.md](./issues-and-fix-plan.md)。
+
 ## 1. [已修復] pull() 覆蓋遠端 plugin 記錄
 - **修復**: bec42fc — mergeJsonFields 加入遞迴 merge
 - **狀態**: 已修復
 
-## 2. [Bug] diff 函式比較對象錯誤
-- **嚴重程度**: High
-- **問題**: `diffSettings()` 和 `diffPluginConfigs()` 比較的是 local `~/.claude/` vs 本地 repo HEAD，而不是 vs `origin/main`
-- **影響**: pull 前的 diff 預覽看不到遠端的新變更，給使用者錯誤的「沒什麼差異」印象
-- **修法**: diff 函式應該在 fetch 後比較 local 和 `origin/main` 的內容（用 `safeGitShow('origin/main', file)` 讀取遠端版本）
+## 2. [已修復] diff 函式比較對象錯誤
+- **修復**: c785d22 + f5c020b (C-01) — diffSettings()/diffPluginConfigs() 現在預設比較 `origin/<branch>`（透過 safeGitShow 讀遠端版本），pull 前的 diff 預覽正確反映 fetch 後的遠端狀態
+- **狀態**: 已修復
 
-## 3. [Bug] pull 前的 export+commit 可能汙染 merge-base
-- **嚴重程度**: High
-- **問題**: `pull()` 在 fetch 前先 `exportAll()` + `commit`，這個 commit 改變了 HEAD，影響 `merge-base` 的計算
-- **場景**:
-  - 上次 push 後本地 settings 有變更
-  - pull 前 export+commit 產生新的 local commit
-  - merge-base 可能指向錯誤的祖先
-  - smart merge 的 base/local/remote 三方比較可能不正確
-- **修法**: 考慮用 `safeGitShow` 直接指定 ref 來讀取三方內容，而非依賴 merge-base：
-  - base = 上次 push 的 commit（可從 last-sync.json 記錄）
-  - local = 剛 export+commit 的 HEAD
-  - remote = origin/main
-  - 或者：先 fetch，再 export+commit，確保 merge-base 計算正確
+## 3. [已修復] pull 前的 export+commit 可能汙染 merge-base
+- **修復**: ecacbcb — pull() 改用 `reset --hard origin/<branch>` + 以 last-sync commitHash 為 base 的 3-way import，不再於 fetch 前 export+commit
+- **狀態**: 已修復
 
 ## 4. [Bug] CC plugin install 強制 SSH（CC 的 bug，非我們的）
 - **嚴重程度**: High（影響所有沒有 SSH key 的使用者）

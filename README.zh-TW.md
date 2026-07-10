@@ -74,13 +74,15 @@ claude plugin install /path/to/claude-sync
 
 > 💡 **第二台機器偵測：** 當你在新機器上執行 `/sync-init` 指向一個已有資料的 repo 時，會自動辨識並主動詢問是否要立即 pull — 不需要額外步驟。
 
+> 🌿 **支援非 `main` 的預設分支：** `init()` 會偵測遠端實際的預設分支（例如 `master`），並在之後所有的 push/pull/fetch 都使用該分支 — 不需要手動改名。
+
 ---
 
 ### `/sync-push` — 匯出並推送
 
 將你的本地設定匯出到同步 repo 並推送到遠端。
 
-1. 📝 讀取 `~/.claude/settings.json`，過濾掉黑名單欄位（`statusLine`），寫入 `repo/global/settings.json`
+1. 📝 讀取 `~/.claude/settings.json`，過濾掉黑名單欄位（`statusLine`），將絕對路徑（如 hook 的 `command` 字串）→ `${CLAUDE_HOME}` 佔位符，寫入 `repo/global/settings.json`
 
 2. 🔌 讀取 `~/.claude/plugins/installed_plugins.json` 和 `known_marketplaces.json`，將絕對路徑 → `${CLAUDE_HOME}` 佔位符，寫入 `repo/global/`
 
@@ -104,9 +106,9 @@ claude plugin install /path/to/claude-sync
 
 3. 🔄 **Fetch + merge** — 若發生合併衝突，執行欄位層級 JSON merge（遠端優先）
 
-4. ⚙️ **匯入設定** — 將遠端設定合併到本地 `settings.json`。黑名單欄位（如 `statusLine`）會從本地保留，永遠不會被覆蓋
+4. ⚙️ **匯入設定** — 將 `${CLAUDE_HOME}` 佔位符轉換回本機絕對路徑，再將遠端設定合併到本地 `settings.json`。黑名單欄位（如 `statusLine`）會從本地保留，永遠不會被覆蓋
 
-5. 🔌 **匯入插件設定 + 插件資料** — 將 `${CLAUDE_HOME}` 佔位符轉換回本地絕對路徑。匯入插件資料（`CLAUDE.md`、`blocklist.json`、`data/`、插件專屬目錄）
+5. 🔌 **匯入插件設定 + 插件資料** — 將 `${CLAUDE_HOME}` 佔位符轉換回本地絕對路徑。匯入插件資料（`CLAUDE.md`、`blocklist.json`、`data/`、插件專屬目錄）。這裡的刪除語意是**基於 base 的判斷，不是鏡像同步**：只有當某個本地插件資料檔案在上次同步的 base commit 存在、且遠端已明確刪除時，才會刪除本地檔案；上次 push/pull 之後才在本地新增的檔案（例如新的 blocklist 項目或學習資料）即使 pull 看起來像是遠端內容的乾淨覆蓋，也一律保留。若沒有可比對的 base（例如第一次 pull，或同步狀態損毀），則不會刪除任何檔案，並會在 pull 結果的 `warnings` 中加註說明。
 
 6. 📂 **匯入 commands / rules / agents / skills / hooks** — 從 repo 鏡像同步到本地目錄。在來源機器上刪除的檔案也會在本地移除。`rules/`、`skills/` 和 `hooks/` 的變更會先顯示給使用者確認後才套用（安全措施 — 這些目錄可能包含可執行程式碼）
 
@@ -308,7 +310,7 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 
 | 來源 | 在 repo 中的位置 | 策略 |
 |------|----------------|------|
-| `~/.claude/settings.json` | `global/settings.json` | 黑名單過濾：所有欄位皆同步，**除了** `statusLine` |
+| `~/.claude/settings.json` | `global/settings.json` | 黑名單過濾（所有欄位皆同步，**除了** `statusLine`）+ 絕對路徑 → `${CLAUDE_HOME}` 佔位符 |
 | `~/.claude/plugins/installed_plugins.json` | `global/installed_plugins.json` | 絕對路徑 → `${CLAUDE_HOME}` 佔位符 |
 | `~/.claude/plugins/known_marketplaces.json` | `global/known_marketplaces.json` | 同上路徑轉換 |
 | `~/.claude/commands/` | `user-config/commands/` | 鏡像同步（新增、更新、刪除） |
@@ -316,8 +318,12 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 | `~/.claude/agents/` | `user-config/agents/` | 鏡像同步 |
 | `~/.claude/skills/` | `user-config/skills/` | 鏡像同步 |
 | `~/.claude/hooks/` | `user-config/hooks/` | 鏡像同步 |
-| `~/.claude/plugins/`（選擇性） | `global/plugin-data/` | CLAUDE.md、blocklist.json、data/、插件專屬目錄。排除 `cache/` 和 `marketplaces/`（自動重建） |
-| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製 |
+| `~/.claude/plugins/`（選擇性） | `global/plugin-data/` | 基於 base 的匯入（非鏡像同步）——見下方說明。CLAUDE.md、blocklist.json、data/、插件專屬目錄。排除 `cache/` 和 `marketplaces/`（自動重建） |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | 存在時複製；本地刪除後，push 時也會從 repo 移除 |
+
+> **檔案級刪除以 push 端為準。** 本地刪除 `CLAUDE.md`、`settings.json`，或鏡像同步目錄（`commands/`、`rules/`、`agents/`、`skills/`、`hooks/`）內的檔案後執行 `/sync-push`，該檔案也會從 repo 移除。其他機器接著 pull 時，鏡像同步目錄會把該刪除同步過去。但 `CLAUDE.md` 和 `settings.json` 這兩個檔案目前 import 端還沒有做 3-way base 比對，所以當 repo 端沒有該檔、但本地仍有時，pull 不會刪除本地檔案——這兩個檔案的刪除語意目前以 push 端為準。
+
+> **插件資料的匯入採用基於 base 的（3-way）刪除判斷，不是鏡像同步。** `~/.claude/plugins/` 底下的本地檔案只有在「該檔案存在於上次同步的 base commit、且目前遠端已經沒有這個檔案（即遠端明確刪除）」時才會被刪除。上次 push/pull 之後才在本地新增、從未進入任何同步 base 的插件資料檔案，一律會被保留，即使這次 pull 看起來就像是遠端內容的乾淨複製也一樣。這是刻意設計：safe pull 用來判斷「本地是否有未推送變更」的 `getLocalDelta()` 刻意排除了 plugin-data（避免機器本地的插件快取造成誤判），如果匯入採用鏡像同步，就會在毫無提示的情況下把較新的本地插件資料刪除。若沒有可用的 base commit（第一次 pull，或同步狀態損毀），則不會刪除任何檔案，並會在 pull 結果的 `warnings` 陣列中加註說明。
 
 ### ❌ 不會同步的內容
 
@@ -334,7 +340,7 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 
 ### 🔄 路徑轉換
 
-插件設定檔包含的絕對路徑在不同機器上會不同。同步引擎會自動處理：
+`settings.json` 和插件設定檔都可能包含在不同機器上會不同的絕對路徑（例如 hook 的 `command` 字串）。同步引擎會在讀寫這些檔案的每個地方（匯出、匯入、diff）自動處理：
 
 **Push**（本地 → repo）：
 
@@ -349,6 +355,10 @@ Claude Code 在工作階段真正結束時觸發 `SessionEnd`（不是每次回�
 ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 → /Users/bob/.claude/plugins/cache/superpowers/4.3.1
 ```
+
+> **已知限制：** 只有 `CLAUDE_HOME` 底下的路徑會被轉換——若 hook 的 `command` 參照了 `CLAUDE_HOME` 之外的其他絕對路徑（例如 `$HOME/other-tool/bin/x` 或寫死的 `/opt/...` 路徑），該路徑仍是機器專屬的，同步到其他機器後可能失效。反過來說，`${CLAUDE_HOME}` 這段文字是本佔位符機制的保留字：settings 值中若包含這個字面字串，pull 時會被改寫成該機器的 `~/.claude` 絕對路徑，因此請勿在 settings 值中使用這段字面文字。
+>
+> **遷移說明：** 在此路徑轉換套用到 `settings.json` 之前就已同步的 repo，仍保留未轉換的絕對路徑；升級後第一次 `/sync-push` 會將其正規化為 `${CLAUDE_HOME}` 佔位符。
 
 ---
 

@@ -1,50 +1,44 @@
 'use strict';
-
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
 
-setTimeout(() => process.exit(0), 10000).unref(); // 10s safety timeout
+// SessionEnd fires while Claude Code is shutting down, so it must return fast.
+// The real work (which may fetch/merge/push over the network) runs in a child
+// process with a hard wall-clock cap: spawnSync kills it at TIMEOUT_MS, so
+// shutdown is never blocked longer than that. A killed worker leaves its sync
+// lock owned by a now-dead pid, which acquireLock() reclaims automatically
+// (C-03) — so a timeout is safe, not corrupting.
+//
+// (The previous setTimeout(...).unref() did nothing: the blocking git calls
+// starved the event loop so the timer never fired, and .unref() meant it could
+// not force an exit regardless.)
+const TIMEOUT_MS = 10000;
 
-const CONFIG_PATH = path.join(process.env.HOME, '.claude', 'sync', 'config.json');
-const REPO_DIR = path.join(process.env.HOME, '.claude', 'sync', 'repo');
+const CLAUDE_HOME = process.env.CLAUDE_SYNC_HOME || path.join(os.homedir(), '.claude');
+const CONFIG_PATH = path.join(CLAUDE_HOME, 'sync', 'config.json');
+const REPO_DIR = path.join(CLAUDE_HOME, 'sync', 'repo');
 
-try {
-  if (!fs.existsSync(REPO_DIR) || !fs.existsSync(CONFIG_PATH)) process.exit(0);
+// Nothing to do if sync isn't set up — don't even spawn a worker.
+if (!fs.existsSync(REPO_DIR) || !fs.existsSync(CONFIG_PATH)) process.exit(0);
 
-  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..');
-  const syncEngine = require(path.join(pluginRoot, 'lib', 'sync-engine.js'));
-  const config = syncEngine.loadConfig() || {};
+// Worker path is overridable via env purely so the timeout behavior can be
+// tested with a sleeping stub without a real slow network. Defaults to the real
+// worker in production.
+const worker = process.env.CLAUDE_SYNC_END_WORKER || path.join(__dirname, 'session-end-worker.js');
 
-  if (config.autoPush) {
-    // Auto-push: push() handles export + lock + commit + push internally
-    try {
-      const result = syncEngine.push();
-      if (result.pushed) {
-        if (result.mergeWarnings && result.mergeWarnings.length > 0) {
-          const files = result.mergeWarnings.map(w => w.file).join(', ');
-          process.stderr.write(`[claude-sync] \u26a0\ufe0f ${files} \u7121\u6cd5\u89e3\u6790\u70ba JSON\uff0c\u5df2\u8df3\u904e\u6b04\u4f4d\u5c64\u7d1a\u5408\u4f75\u3002\n`);
-        }
-        if (result.mergeConflicts && result.mergeConflicts.length > 0) {
-          const keys = result.mergeConflicts.map(c => c.key).join(', ');
-          process.stderr.write(`[claude-sync] \u26a0\ufe0f \u81ea\u52d5\u63a8\u9001\u5b8c\u6210\uff0c\u4f46\u6709 ${result.mergeConflicts.length} \u500b\u6b04\u4f4d\u885d\u7a81\uff08\u5df2\u4fdd\u7559\u672c\u5730\u7248\u672c\uff09\uff1a${keys}\n`);
-        } else {
-          process.stderr.write('[claude-sync] \u2705 \u5df2\u81ea\u52d5\u63a8\u9001\u8b8a\u66f4\u5230\u9060\u7aef\u3002\n');
-        }
-      }
-    } catch (e) {
-      process.stderr.write(`[claude-sync] \u26a0\ufe0f \u81ea\u52d5\u63a8\u9001\u5931\u6557\uff1a${e.message}\n`);
-    }
-  } else {
-    // Best-effort check: export to see if there are local changes, then revert
-    try {
-      syncEngine.exportAll();
-      const hasChanges = syncEngine.hasLocalChanges();
-      try { syncEngine.gitExec('checkout -- .'); } catch {}
-      if (hasChanges) {
-        process.stderr.write('[claude-sync] \ud83d\udccc \u672c\u5730\u6709\u672a\u63a8\u9001\u7684\u8b8a\u66f4\u3002\u57f7\u884c /sync-push \u4f86\u540c\u6b65\u3002\n');
-      }
-    } catch {}
-  }
-} catch {
-  process.exit(0);
+const res = spawnSync(process.execPath, [worker], {
+  timeout: TIMEOUT_MS,
+  stdio: 'inherit',
+  env: process.env,
+});
+
+// spawnSync sets res.error (code ETIMEDOUT) and/or kills with res.signal on
+// timeout. Either signals we gave up. The worker handles its own internal
+// failures and prints them itself, so a launcher-level error is effectively
+// "worker didn't finish in time".
+if (res.error || res.signal) {
+  process.stderr.write('[claude-sync] ⚠️ 自動推送逾時（>10s），已放棄。請稍後手動執行 /sync-push。\n');
 }
+process.exit(0);

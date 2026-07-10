@@ -163,7 +163,11 @@ Always show the diff to the user before pulling. Each diff entry contains:
 
 1. **Always show diffs before pulling.** Never auto-apply remote settings without the user seeing what will change.
 
-2. **Rules require explicit confirmation.** If `/sync-pull` includes changes to `~/.claude/rules/`, show the full diff and ask the user to confirm before applying. This is a security measure against supply chain attacks.
+2. **Executable dirs use two-stage confirmation.** `pull()` NEVER writes `hooks/`, `skills/`, or `rules/` to `~/.claude` directly — a change there comes back in the result's `pendingConfirmation: [{ dir, changes: [...] }]` and `last-sync` is not advanced. Show the full diff for each pending dir, then call `applyPendingDirs([...approved dirs])` to write them (advances `last-sync`; unapproved dirs stay pending and are re-offered next pull) or `discardPendingDirs()` to drop all pending dirs (does not advance; re-offered next pull). Warn the user that declining means the local version of that dir wins — their next `/sync-push` will overwrite the remote's newer version. This is a security measure against supply chain attacks — a compromised remote cannot auto-drop a hook that runs on the next session.
+
+2a. **Unknown remote dirs require opt-in.** A repo dir that is not in this machine's allow set comes back in the result's `unknownRemoteDirs` and is NOT imported. Ask the user to `addAllowSyncDir(dir)` (start syncing it) or `addSkipSyncDir(dir)` (never), then re-run `pull()` to import any newly allowed dirs.
+
+2b. **Suspicious remote dirs are blocked.** A repo dir whose name differs from a reserved dir only by letter case (e.g. `Hooks`) aliases the reserved path on case-insensitive filesystems (macOS/Windows). Such dirs come back in the result's `suspiciousRemoteDirs`, are never importable, and `addAllowSyncDir` rejects their names. Warn the user this looks like a spoofing attempt against the sync repo and suggest reviewing its recent history.
 
 3. **Auto-reinstall missing plugins after pull.** After a successful pull, check for missing marketplaces and plugins:
 
@@ -176,8 +180,8 @@ Always show the diff to the user before pulling. Each diff entry contains:
    "
    ```
 
-   - For each missing marketplace, run: `claude plugin marketplace add <source>:<repo>` (e.g., `claude plugin marketplace add github:anthropics/claude-plugins-official`)
-   - After marketplaces are restored, run: `claude plugin update` to reinstall all missing plugins
+   - For each **missing plugin**, run: `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones the parent marketplace as a side-effect, so a separate `marketplace add` is unnecessary for marketplaces that have at least one plugin to install.
+   - For any marketplace that is *still* missing after the plugin installs (i.e., declared in `enabledPlugins` but with no plugins to trigger a side-effect clone), run: `claude plugin marketplace add <owner>/<repo>` (e.g. `claude plugin marketplace add anthropics/claude-plugins-official`). **Do NOT** prefix with `github:` — recent CLI versions (≥ 2.x) reject that format.
    - This ensures the pull results in a fully working setup, not just config files without actual plugin code
 
 4. **CLAUDE.md sync.** The global `~/.claude/CLAUDE.md` file (user's personal memory) is included in sync. It is exported to `repo/user-config/CLAUDE.md` and imported back during pull. Backups also include CLAUDE.md.
@@ -219,7 +223,12 @@ All functions are available from `require('PLUGIN_ROOT/lib/sync-engine.js')`:
 | `isInitialized()` | Returns `true` if sync is set up |
 | `init(remoteUrl)` | Clone repo, export if empty, save config |
 | `push()` | Export local settings, commit, push (with retry) |
-| `pull()` | Backup, fetch, merge, import settings |
+| `pull()` | Backup, fetch, merge, import (defers `hooks/`/`skills/`/`rules/` as `pendingConfirmation`; surfaces `unknownRemoteDirs` and `suspiciousRemoteDirs`) |
+| `applyPendingDirs([dirs])` | Write user-confirmed executable dirs, advance `last-sync`; unconfirmed dirs stay pending |
+| `discardPendingDirs()` | Drop all deferred executable dirs without applying or advancing `last-sync` |
+| `getUnknownRemoteDirs()` | Repo dirs not in the local allow set (not imported until opted in) |
+| `getSuspiciousRemoteDirs()` | Repo dirs case-fold-colliding with reserved names (never importable) |
+| `addAllowSyncDir(dir)` / `addSkipSyncDir(dir)` | Opt a dir into / out of syncing |
 | `getStatus()` | Full status report (initialized, updates, changes) |
 | `diffSettings()` | JSON-level diff of settings fields |
 | `diffPluginConfigs()` | File-level diff of plugin configs |

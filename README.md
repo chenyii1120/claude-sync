@@ -74,13 +74,15 @@ Two paths depending on your environment:
 
 > 💡 **Second machine detection:** When you run `/sync-init` on a new machine pointing to a repo that already has data, it automatically recognizes this and offers to pull immediately — no extra steps.
 
+> 🌿 **Non-`main` default branches are supported:** `init()` detects the remote's actual default branch (e.g. `master`) and uses it for every subsequent push/pull/fetch — you don't need to rename anything.
+
 ---
 
 ### `/sync-push` — Export & push
 
 Exports your local settings to the sync repo and pushes to remote.
 
-1. 📝 Reads `~/.claude/settings.json`, filters out blacklisted fields (`statusLine`), writes to `repo/global/settings.json`
+1. 📝 Reads `~/.claude/settings.json`, filters out blacklisted fields (`statusLine`), transforms absolute paths → `${CLAUDE_HOME}` placeholders (e.g. hook `command` strings), writes to `repo/global/settings.json`
 
 2. 🔌 Reads `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`, transforms absolute paths → `${CLAUDE_HOME}` placeholders, writes to `repo/global/`
 
@@ -104,15 +106,17 @@ Pulls remote settings and applies them locally.
 
 3. 🔄 **Fetch + merge** — If merge conflicts occur, performs field-level JSON merge with remote preference
 
-4. ⚙️ **Import settings** — Merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
+4. ⚙️ **Import settings** — Transforms `${CLAUDE_HOME}` placeholders back to this machine's absolute paths, then merges remote settings into local `settings.json`. Blacklisted fields (e.g., `statusLine`) are preserved from local and never overwritten
 
-5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs)
+5. 🔌 **Import plugin configs + plugin data** — Transforms `${CLAUDE_HOME}` placeholders back to local absolute paths. Imports plugin data (`CLAUDE.md`, `blocklist.json`, `data/`, plugin-specific dirs). Deletion here is **base-aware, not a mirror**: a local plugin-data file is only removed if it existed at the last-sync point and was explicitly deleted on the remote; a file you created locally after your last push/pull (e.g. a new blocklist entry or learned data) is preserved even if the pull is otherwise a clean overlay of remote content. With no base to compare against (first pull, or corrupted sync state), nothing is deleted and a note is added to the pull result's `warnings`.
 
-6. 📂 **Import commands / rules / agents / skills / hooks** — Mirror syncs from repo to local directories. Files deleted on the source machine are also removed locally. Changes to `rules/`, `skills/`, and `hooks/` are shown to the user with a confirmation prompt before applying (security measure — these may contain executable code)
+6. 📂 **Import commands / agents** — Mirror syncs non-executable user-config dirs from repo to local directories. Files deleted on the source machine are also removed locally.
 
-6. 🔧 **Auto plugin reinstallation** — Detects missing marketplace clones and plugin installations. Automatically runs:
-   - `claude plugin marketplace add` for each missing marketplace source
-   - `claude plugin update` to reinstall all missing plugins
+7. 🔐 **Two-stage confirm for `rules/` / `skills/` / `hooks/`** — These dirs can contain executable code (JS hooks, shell scripts, agent-followed instructions), so pull **never writes them to `~/.claude` directly**. A change there is returned as `pendingConfirmation`; `/sync-pull` shows you the full diff and asks you to confirm before `applyPendingDirs()` writes it (or `discardPendingDirs()` drops it). `last-sync` does not advance until you decide, so an abandoned/declined confirmation is safely re-offered on the next pull. This closes the gap where a compromised remote could drop a hook that auto-runs on your next session.
+
+8. 🚦 **Opt-in for unknown remote dirs** — A dir present in the repo but **not** in this machine's allow set (`DEFAULT_USER_CONFIG_DIRS` ∪ `allowSyncDirs` − `skipSyncDirs`) is **not** imported. It is returned as `unknownRemoteDirs`, and `/sync-pull` asks you to `add` (allow-list) or `skip` it before it can land locally — symmetric with the push side, so another machine (or a compromised repo) can't silently drop a new directory into your `~/.claude`. Reserved-name checks are case-folded: a repo dir like `Hooks` (which aliases `hooks/` on macOS/Windows) is flagged as `suspiciousRemoteDirs`, can never be imported or allow-listed, and is reported as a likely spoofing attempt.
+
+9. 🔧 **Auto plugin reinstallation** — Detects missing plugin installations and reinstalls them via `claude plugin install <plugin>@<marketplace>`. The CLI auto-clones each parent marketplace on demand, so a separate `marketplace add` is only needed for marketplaces declared in `enabledPlugins` that have no plugins to trigger a side-effect clone.
 
    > This ensures a pull results in a **fully working setup**, not just config files without actual plugin code.
 
@@ -308,7 +312,7 @@ Session start (new / resume / clear / compact)
 
 | Source | Destination in repo | Strategy |
 |--------|-------------------|----------|
-| `~/.claude/settings.json` | `global/settings.json` | Blacklist filter: all fields synced **except** `statusLine` |
+| `~/.claude/settings.json` | `global/settings.json` | Blacklist filter (all fields synced **except** `statusLine`) + absolute paths → `${CLAUDE_HOME}` placeholder |
 | `~/.claude/plugins/installed_plugins.json` | `global/installed_plugins.json` | Absolute paths → `${CLAUDE_HOME}` placeholder |
 | `~/.claude/plugins/known_marketplaces.json` | `global/known_marketplaces.json` | Same path transformation |
 | `~/.claude/commands/` | `user-config/commands/` | Mirror sync (adds, updates, and deletes) |
@@ -316,16 +320,20 @@ Session start (new / resume / clear / compact)
 | `~/.claude/agents/` | `user-config/agents/` | Mirror sync |
 | `~/.claude/skills/` | `user-config/skills/` | Mirror sync |
 | `~/.claude/hooks/` | `user-config/hooks/` | Mirror sync |
-| `~/.claude/plugins/` (selective) | `global/plugin-data/` | CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
-| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists |
+| `~/.claude/plugins/` (selective) | `global/plugin-data/` | Base-aware import (not a mirror) — see below. CLAUDE.md, blocklist.json, data/, plugin-specific dirs. Excludes `cache/` and `marketplaces/` (auto-rebuilt) |
+| `~/.claude/CLAUDE.md` | `user-config/CLAUDE.md` | Copy if exists; removed from the repo on push if deleted locally |
+
+> **File-level deletions propagate from the push side.** Deleting `CLAUDE.md`, `settings.json`, or a file inside a mirror-synced dir (`commands/`, `rules/`, `agents/`, `skills/`, `hooks/`) locally and running `/sync-push` removes it from the repo too. Pulling on another machine will then remove it there as well for mirror-synced dirs. For `CLAUDE.md` and `settings.json` specifically, pull does not yet delete a file that's missing from the repo but still present locally (no 3-way base comparison on the import side yet) — push is the source of truth for those two files' deletions.
+
+> **Plugin data is imported with base-aware (3-way) deletion, not a mirror.** A local file under `~/.claude/plugins/` is only deleted on pull if it existed at the last-sync base commit AND is now absent from the remote (an explicit remote deletion). Local-only plugin-data files — written after your last push/pull and never part of any synced base — are always preserved, even when a pull otherwise looks like a clean copy of the remote. This is deliberate: `getLocalDelta()` (the check safe pull uses to decide whether local has unpushed changes) excludes plugin-data to avoid false positives from machine-local plugin caches, so a mirror-style import would have silently deleted newer local plugin data with no warning. If no base commit is available (first pull, or corrupted sync state), nothing is deleted and a note is added to the pull result's `warnings` array.
 
 ### ❌ What Does NOT Get Synced
 
 | Item | Reason |
 |------|--------|
 | `statusLine` field in settings | Contains machine-specific absolute paths (e.g., `/opt/homebrew/bin/node`) that would break on another machine |
-| `plugins/cache/` | Plugin source code; **auto-rebuilt** on pull via `claude plugin update` |
-| `plugins/marketplaces/` | Marketplace git clones; **auto-rebuilt** on pull via `claude plugin marketplace add` |
+| `plugins/cache/` | Plugin source code; **auto-rebuilt** on pull via `claude plugin install <plugin>@<marketplace>` |
+| `plugins/marketplaces/` | Marketplace git clones; **auto-cloned on demand** when `claude plugin install` runs (or via `claude plugin marketplace add <owner>/<repo>` for marketplaces with no enabled plugins) |
 | `plugins/install-counts-cache.json` | Cache data, rebuildable |
 | `projects/*/*.jsonl` | Session transcripts; large and sensitive |
 | `debug/`, `cache/`, `history.jsonl` | Machine-specific temporary data |
@@ -334,7 +342,7 @@ Session start (new / resume / clear / compact)
 
 ### 🔄 Path Transformation
 
-Plugin config files contain absolute paths that differ between machines. The sync engine handles this automatically:
+`settings.json` and plugin config files can contain absolute paths (e.g. a hook's `command` string) that differ between machines. The sync engine transforms them automatically, everywhere it reads or writes those files (export, import, and diff):
 
 **Push** (local → repo):
 
@@ -349,6 +357,10 @@ Plugin config files contain absolute paths that differ between machines. The syn
 ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 → /Users/bob/.claude/plugins/cache/superpowers/4.3.1
 ```
+
+> **Known limitation:** only paths under `CLAUDE_HOME` are transformed — a hook `command` that references another absolute path outside it (e.g. `$HOME/other-tool/bin/x` or a hardcoded `/opt/...` path) stays machine-specific and may break on another machine. Conversely, the literal text `${CLAUDE_HOME}` is reserved by this placeholder convention: a settings value containing that exact string is rewritten to the machine's absolute `~/.claude` path on pull, so don't use it as literal text in settings values.
+>
+> **Migration note:** repos synced before this transformation was added to `settings.json` hold untransformed absolute paths; the first `/sync-push` after upgrading normalizes them to `${CLAUDE_HOME}` placeholders.
 
 ---
 
@@ -404,7 +416,7 @@ Uses **JSON field-level 3-way merge**:
 | 📤 Push rejected | Auto fetch + merge + retry |
 | ⚡ Merge conflict | Field-level 3-way merge + backup safety net |
 | 🔒 Concurrent sync | Lockfile prevents simultaneous operations |
-| 🔌 Missing plugins after pull | Auto-reinstalls: marketplace add + plugin update |
+| 🔌 Missing plugins after pull | Auto-reinstalls via `claude plugin install <plugin>@<marketplace>` (CLI auto-clones marketplace on demand) |
 | 👤 No global git identity | Auto-configures in sync repo (inherits from global config or uses defaults) |
 
 ---
