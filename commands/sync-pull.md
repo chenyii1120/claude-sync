@@ -250,3 +250,60 @@ these steps exactly and in order.
    If the user wants to keep local values for some fields:
    - Modify the local `~/.claude/settings.json` with the chosen values.
    - Tell the user: "Settings updated. Run /sync-push to push your choices to remote."
+
+10. **Apply pinned plugin versions (sync-pin).** After the pull (and any applies/reinstalls
+    above) are complete, check whether the just-pulled lock has drift against what's
+    installed locally.
+
+    **Gate:** skip this whole step silently if pinning is disabled:
+    ```bash
+    node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsEnabled());"
+    ```
+    If it prints `false`, stop here — do not compute drift, do not mention the lock.
+
+    **Compute drift** against the freshly-pulled commit:
+    ```bash
+    node -e "
+      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+      console.log(JSON.stringify(s.getPluginLockDrift('HEAD')));
+    "
+    ```
+    Keep only rows whose `action` is `reinstall` or `missing` — these are the ones an
+    apply would actually change. If there are none, say nothing further and finish the
+    flow.
+
+    **Present the drift** to the user as a table (plugin, current version, locked
+    version, action), grouped by marketplace (the substring of `plugin` after the
+    last `@`). Explain plainly that applying will reinstall those plugins at the exact
+    pinned commit the pushing machine recorded, and that this changes installed plugin
+    code — the same caution as the executable-dir confirmation in step 6.
+
+    **Ask which marketplaces to apply** with **AskUserQuestion** — a multiSelect
+    Apply/Skip per affected marketplace (a plain Apply/Skip is fine if only one
+    marketplace is affected). Marketplaces the user skips are left untouched and are
+    re-offered on a later pull.
+
+    **Apply the approved marketplaces:**
+    ```bash
+    node -e "
+      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+      console.log(JSON.stringify(s.applyPluginLock(JSON.parse(process.argv[1])), null, 2));
+    " '{"marketplaces":["<name1>","<name2>"]}'
+    ```
+    Replace the JSON argv with the actual approved marketplace names. If the user
+    approved none, skip this call entirely.
+
+    **Report results** from the returned object:
+    - `results[]` entries with `status:'applied'` — confirm the marketplace's plugins
+      were reproduced at the pinned `commit`, listing the `reinstalled` ids.
+    - If `unreproducible` is non-empty, the pinned commit no longer exists upstream
+      (history was rewritten on the machine that pushed it). Look up each affected
+      marketplace's pinned commit from the drift rows computed above (`lockedCommit`,
+      grouped by marketplace) and warn the user by name, then offer three options:
+      (a) update the pin to a newer commit and push from a machine that still has it,
+      (b) keep the currently installed version for now — nothing was changed for that
+      marketplace, or (c) a vendor fallback, which is **not yet available** and will
+      arrive in a later phase.
+    - `results[]` entries with `status:'invalid-name'|'invalid-url'|'clone-failed'` —
+      report that the marketplace could not be prepared (its name or URL failed
+      validation, or the clone failed) and was skipped without touching any installs.
