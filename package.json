@@ -1,6 +1,6 @@
 {
   "name": "claude-sync",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Sync your Claude Code settings, plugins, and commands across machines using any git remote",
   "private": true,
   "license": "MIT",
