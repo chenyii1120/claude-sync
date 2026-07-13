@@ -42,7 +42,13 @@ Help the user initialize claude-sync. Follow these steps:
    - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
    - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
-5a. **Ask about plugin version pinning.** Init is the natural first-time moment for this, so ask unconditionally (no need to check whether it was already decided). Use **AskUserQuestion**:
+5a. **Ask about plugin version pinning (unless already decided).** Init is the natural first-time moment for this — but the `hasContent: true` path in step 5 may have already run the `/sync-pull` flow, which asks this same question and records the answer. So check first:
+
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsDecided());"
+   ```
+
+   If `true`, skip this step silently (do not ask again). If `false`, use **AskUserQuestion**:
 
    > 是否要鎖定已啟用插件的版本（pinPlugins）？啟用後，`/sync-push` 會把每個已啟用插件目前安裝的 git commit 記錄進 `plugins.lock.json`，讓其他機器可以重現相同版本，而不是隨 marketplace 最新版飄移。
    >
