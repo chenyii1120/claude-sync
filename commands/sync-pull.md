@@ -35,6 +35,23 @@ these steps exactly and in order.
    # Disable:
    node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(false);"
    ```
+
+   **If the user chose Disable**, check whether this machine already has any
+   claude-sync-managed pinned marketplace, which would otherwise stay frozen at its
+   pinned commit forever with pinning off:
+   ```bash
+   node -e "const fs=require('fs'),p=require('path'),os=require('os'); const d=p.join(process.env.CLAUDE_CONFIG_DIR||p.join(os.homedir(),'.claude'),'sync','pinned-marketplaces'); console.log(JSON.stringify(fs.existsSync(d)?fs.readdirSync(d):[]));"
+   ```
+   If the array is non-empty, tell the user pinning is being turned off and use
+   **AskUserQuestion** to ask, for each managed marketplace listed, whether to unpin it
+   back to its original github source now (reinstalling at latest) or leave it as is.
+   For each the user chooses to unpin:
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.reverseMigrateMarketplace(process.argv[1]),null,2));" "<name>"
+   ```
+   If they leave one in place, tell them its plugins stay frozen at their pinned commit
+   until pinning is re-enabled or it's manually unpinned.
+
    If `pinPluginsDecided()` was already `true`, skip this step silently — do not ask again.
 
    Note for either choice: in Phase 1A, `/sync-pull` does **not** yet apply the plugin
