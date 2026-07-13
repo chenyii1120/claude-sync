@@ -278,6 +278,112 @@ test('exportPluginLock: multiple enabled plugins from the same marketplace share
   }
 });
 
+test('exportPluginLock: preserves the original upstream url when re-pushing from a pinned machine (path-source marketplace)', () => {
+  const root = mkTmpDir('claude-sync-export-lock-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const { execFileSync } = require('child_process');
+
+    // The ORIGINAL upstream the marketplace was pinned from.
+    const upstreamDir = path.join(root, 'upstream');
+    fs.mkdirSync(upstreamDir, { recursive: true });
+    execFileSync('git', ['init', '-b', 'main'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: upstreamDir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(upstreamDir, 'file.txt'), 'hello');
+    execFileSync('git', ['add', '-A'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: upstreamDir, stdio: 'pipe' });
+    const commitX = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamDir, stdio: 'pipe' }).toString().trim();
+
+    // This machine already APPLIED the pin: mp is registered as a local
+    // path-source marketplace whose git origin IS the original upstream url.
+    const cloneDir = path.join(claudeHome, 'sync', 'pinned-marketplaces', 'mp');
+    execFileSync('git', ['clone', upstreamDir, cloneDir], { stdio: 'pipe' });
+
+    seedPluginHome(claudeHome, {
+      enabledPlugins: { 'foo@mp': true },
+      installedPlugins: {
+        'foo@mp': [{ scope: 'user', version: '1.0.0', gitCommitSha: commitX }],
+      },
+      knownMarketplaces: {
+        // Directory/path source -- not github, and no source.url either, so
+        // the naive derivation would produce undefined or a local path.
+        mp: { source: { source: 'directory', path: cloneDir }, installLocation: cloneDir },
+      },
+    });
+
+    // An existing committed lock already records the REAL upstream url.
+    const globalDir = path.join(claudeHome, 'sync', 'repo', 'global');
+    fs.mkdirSync(globalDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalDir, 'plugins.lock.json'),
+      JSON.stringify({
+        version: 1,
+        generatedAt: '2020-01-01T00:00:00.000Z',
+        generatedBy: 'other-machine',
+        marketplaces: { mp: { url: upstreamDir, pinnedCommit: commitX } },
+        plugins: { 'foo@mp': { marketplace: 'mp', version: '1.0.0' } },
+      }, null, 2),
+    );
+
+    const engine = loadEngine(claudeHome);
+    engine.exportPluginLock();
+
+    const lock = readLock(claudeHome);
+    assert.equal(
+      lock.marketplaces.mp.url,
+      upstreamDir,
+      'must preserve the original upstream url recorded in the existing lock, not the local clone path',
+    );
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('exportPluginLock: falls back to the pinned clone origin url when no existing lock and source is not github', () => {
+  const root = mkTmpDir('claude-sync-export-lock-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const { execFileSync } = require('child_process');
+
+    const upstreamDir = path.join(root, 'upstream');
+    fs.mkdirSync(upstreamDir, { recursive: true });
+    execFileSync('git', ['init', '-b', 'main'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: upstreamDir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(upstreamDir, 'file.txt'), 'hello');
+    execFileSync('git', ['add', '-A'], { cwd: upstreamDir, stdio: 'pipe' });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: upstreamDir, stdio: 'pipe' });
+    const commitX = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: upstreamDir, stdio: 'pipe' }).toString().trim();
+
+    const cloneDir = path.join(claudeHome, 'sync', 'pinned-marketplaces', 'mp');
+    execFileSync('git', ['clone', upstreamDir, cloneDir], { stdio: 'pipe' });
+
+    seedPluginHome(claudeHome, {
+      enabledPlugins: { 'foo@mp': true },
+      installedPlugins: {
+        'foo@mp': [{ scope: 'user', version: '1.0.0', gitCommitSha: commitX }],
+      },
+      knownMarketplaces: {
+        mp: { source: { source: 'directory', path: cloneDir }, installLocation: cloneDir },
+      },
+    });
+    // No existing lock at all.
+
+    const engine = loadEngine(claudeHome);
+    engine.exportPluginLock();
+
+    const lock = readLock(claudeHome);
+    assert.equal(
+      lock.marketplaces.mp.url,
+      upstreamDir,
+      'must derive the url from the pinned clone origin remote when there is no prior lock to consult',
+    );
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('exportAll: returns { unlockable } shape', () => {
   const root = mkTmpDir('claude-sync-export-lock-');
   try {

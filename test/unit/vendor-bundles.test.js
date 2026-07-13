@@ -159,6 +159,38 @@ test('exportPluginVendorBundles: prunes a stale bundle left over from a previous
   }
 });
 
+test('exportPluginVendorBundles: prunes the bundle dir for a marketplace removed from config.vendorMarketplaces', () => {
+  const root = mkTmpDir('claude-sync-vendor-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commitX = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const engine = loadEngine(claudeHome);
+    seedHome(claudeHome, {
+      // 'oldmp' is no longer in the list -- only 'mp' is still vendored.
+      vendorMarketplaces: ['mp'],
+      lock: { version: 1, marketplaces: { mp: { url: sourceDir, pinnedCommit: commitX } }, plugins: {} },
+    });
+    const cloneRoot = path.join(claudeHome, 'sync', 'pinned-marketplaces');
+    engine.preparePinnedClone('mp', sourceDir, commitX, { cloneRoot });
+
+    // Pre-plant a leftover bundle dir for a marketplace no longer vendored.
+    const oldDir = vendorDir(claudeHome, 'oldmp');
+    fs.mkdirSync(oldDir, { recursive: true });
+    fs.writeFileSync(path.join(oldDir, `${'f'.repeat(40)}.bundle`), 'stale');
+
+    engine.exportPluginVendorBundles();
+
+    assert.equal(fs.existsSync(oldDir), false, 'de-vendored marketplace bundle dir must be pruned');
+    const mpBundle = path.join(vendorDir(claudeHome, 'mp'), `${commitX}.bundle`);
+    assert.ok(fs.existsSync(mpBundle), 'still-vendored marketplace bundle must remain');
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('exportPluginVendorBundles: empty config.vendorMarketplaces is a no-op', () => {
   const root = mkTmpDir('claude-sync-vendor-');
   try {

@@ -157,6 +157,50 @@ test('setPinnedRef: a ref that does not exist returns bad-ref and touches no plu
   }
 });
 
+test('setPinnedRef: resolves a BRANCH ref to the fetched remote tip, not a stale local ref', () => {
+  const root = mkTmpDir('claude-sync-set-pinned-ref-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commit1 = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const cloneDir = path.join(claudeHome, 'sync', 'pinned-marketplaces', 'mp');
+
+    seedHome(claudeHome, {
+      enabledPlugins: { 'foo@mp': true },
+      installedPlugins: { 'foo@mp': [{ version: '1.0.0' }] },
+      lock: {
+        version: 1,
+        marketplaces: { mp: { url: sourceDir, pinnedCommit: commit1 } },
+        plugins: { 'foo@mp': { marketplace: 'mp', version: '1.0.0' } },
+      },
+    });
+
+    // Pre-create the pinned clone, checked out detached at commit1 -- same
+    // shape a real prior pin leaves behind. The clone's local `main` branch
+    // is therefore also stuck at commit1.
+    fs.mkdirSync(path.dirname(cloneDir), { recursive: true });
+    git(root, ['clone', sourceDir, cloneDir]);
+    git(cloneDir, ['checkout', '--detach', commit1]);
+
+    // Source repo's `main` advances AFTER the clone was made.
+    writeAndCommit(sourceDir, 'file.txt', 'world', 'second commit');
+    const commit2 = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const engine = loadEngine(claudeHome);
+    const { runPlugin } = makeSpy();
+
+    const result = engine.setPinnedRef('mp', 'main', { runPlugin });
+
+    assert.equal(result.status, 'applied');
+    assert.equal(result.commit, commit2, 'branch ref must resolve to the fetched remote tip, not the stale local branch');
+    assert.equal(result.ref, 'main');
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('setPinnedRef: happy path resolves a tag, clones, and delegates to pinMarketplaceToCommit', () => {
   const root = mkTmpDir('claude-sync-set-pinned-ref-');
   try {
