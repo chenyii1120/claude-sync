@@ -9,7 +9,8 @@ description: Show plugin pin drift, or re-pin a marketplace to a specific ref
 
 ## Your Task
 
-`/sync-pin` has two sub-flows depending on the argument the user gave: `status` (default, no argument) and `set <marketplace> <ref>`.
+`/sync-pin` has three sub-flows depending on the argument the user gave: `status` (default, no
+argument), `set <marketplace> <ref>`, and `vendor <marketplace> [off]`.
 
 1. **Check initialized.** If not, tell the user to run `/sync-init` first and stop.
 
@@ -63,3 +64,27 @@ description: Show plugin pin drift, or re-pin a marketplace to a specific ref
    - `status: 'unreproducible'` — the resolved commit could not be checked out; nothing
      was changed.
    - Any other status: report it plainly and note nothing was changed.
+
+### `/sync-pin vendor <marketplace> [off]`
+
+6. **No marketplace given** — just show the current vendor list. Run:
+   ```bash
+   node -e "const s=require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.vendorMarketplaces()));"
+   ```
+   Render the list, or tell the user no marketplace is currently vendored if it's empty.
+
+7. **`/sync-pin vendor <marketplace>`** (no `off`) — enable vendoring:
+   ```bash
+   node -e "const s=require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.setVendorMarketplace(process.argv[1], true)));" "<marketplace>"
+   ```
+   Tell the user `<marketplace>` will now be vendored: on the next `/sync-push`, a `git bundle`
+   of its pinned commit is stored in the sync repo, so the exact version can still be restored
+   on other machines even if the upstream repo later force-pushes or deletes that commit.
+   Remind them to run **`/sync-push`** to actually create and store the bundle.
+
+8. **`/sync-pin vendor <marketplace> off`** — disable vendoring:
+   ```bash
+   node -e "const s=require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.setVendorMarketplace(process.argv[1], false)));" "<marketplace>"
+   ```
+   Tell the user `<marketplace>` will no longer be vendored. Any existing bundle for it is
+   pruned on the next `/sync-push` once it's no longer pinned/vendored.

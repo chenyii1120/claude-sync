@@ -314,13 +314,17 @@ these steps exactly and in order.
     - `results[]` entries with `status:'applied'` — confirm the marketplace's plugins
       were reproduced at the pinned `commit`, listing the `reinstalled` ids.
     - If `unreproducible` is non-empty, the pinned commit no longer exists upstream
-      (history was rewritten on the machine that pushed it). Look up each affected
-      marketplace's pinned commit from the drift rows computed above (`lockedCommit`,
-      grouped by marketplace) and warn the user by name, then offer three options:
-      (a) update the pin to a newer commit and push from a machine that still has it,
-      (b) keep the currently installed version for now — nothing was changed for that
-      marketplace, or (c) a vendor fallback, which is **not yet available** and will
-      arrive in a later phase.
+      (history was rewritten on the machine that pushed it), AND no vendor bundle was
+      available to fall back on — the engine already tries the vendor bundle
+      automatically before giving up, so a marketplace only lands here when there is
+      also no bundle for it. Look up each affected marketplace's pinned commit from the
+      drift rows computed above (`lockedCommit`, grouped by marketplace) and warn the
+      user by name, then offer two options: (a) update the pin to a newer commit and
+      push from a machine that still has it, or (b) keep the currently installed
+      version for now — nothing was changed for that marketplace. Also mention that to
+      protect this marketplace against future upstream rewrites, they can enable
+      vendoring with `/sync-pin vendor <marketplace>` and re-push from a machine that
+      still has the commit, so the bundle is stored for next time.
     - `results[]` entries with `status:'invalid-name'|'invalid-url'|'clone-failed'` —
       report that the marketplace could not be prepared (its name or URL failed
       validation, or the clone failed) and was skipped without touching any installs.

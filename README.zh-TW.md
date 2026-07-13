@@ -372,6 +372,12 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 > **Phase 1A 範圍：** 這個階段只負責記錄鎖定，並透過 `/sync-status` 顯示版本飄移。真正在 `/sync-pull` 時跨機器套用鎖定版本，會在之後的階段實作。
 
+### Vendor 備援
+
+一般情況下，pin 住的版本是透過 clone marketplace 的上游 repo、checkout 該 pin 住的 commit 來重現。若該上游之後改寫了歷史並刪除了那個 commit，這個 pin 就會變成「無法重現（unreproducible）」，再也無法從 origin 還原。
+
+對於你不能承受遺失的 marketplace，可以用 `/sync-pin vendor <marketplace>` 啟用 vendoring（或直接在 `~/.claude/sync/config.json` 的 `vendorMarketplaces` 加入該名稱）。push 時，claude-sync 會把 pin 住的 commit 打包成一個獨立的 `git bundle`，存進你的同步 repo；pull 時，若上游已經沒有該 commit，就會用這個 bundle 作為備援，還原出確切版本。
+
 ---
 
 ## ⚡ 衝突解決

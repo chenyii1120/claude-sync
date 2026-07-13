@@ -374,6 +374,12 @@ To disable it, set `"pinPlugins": false` in `~/.claude/sync/config.json`, or cho
 
 > **Phase 1A scope:** this phase records the lock and surfaces drift via `/sync-status`. Actually applying the pinned versions across machines during `/sync-pull` arrives in a later phase.
 
+### Vendor fallback
+
+Normally a pinned version is reproduced by cloning the marketplace's upstream repo at the pinned commit. If that upstream later rewrites history and deletes the commit, the pin becomes "unreproducible" and can't be restored from origin anymore.
+
+For marketplaces you can't afford to lose, enable vendoring with `/sync-pin vendor <marketplace>` (or add the name to `vendorMarketplaces` in `~/.claude/sync/config.json`). On push, claude-sync stores a self-contained `git bundle` of the pinned commit inside your sync repo; on pull, that bundle is used as a fallback so the exact version is restored even when upstream no longer has it.
+
 ---
 
 ## ⚡ Conflict Resolution
