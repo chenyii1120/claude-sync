@@ -283,6 +283,35 @@ test('reverseMigrateMarketplace: no origin url anywhere returns no-origin-url wi
   }
 });
 
+test('reverseMigrateMarketplace: rejects an unsafe/invalid origin url from the lockfile and never touches the CLI', () => {
+  const root = mkTmpDir('claude-sync-reverse-');
+  const unsafeUrls = ["ext::sh -c 'touch /tmp/pwned'", '--upload-pack=x'];
+  try {
+    for (const unsafeUrl of unsafeUrls) {
+      const claudeHome = path.join(root, `claude-home-${unsafeUrls.indexOf(unsafeUrl)}`);
+      seedHome(claudeHome, {
+        installedPlugins: { 'foo@mp': [{ version: '1.0.0' }] },
+        knownMarketplaces: { mp: { installLocation: path.join(claudeHome, 'sync', 'pinned-marketplaces', 'mp') } },
+        lock: {
+          version: 1,
+          marketplaces: { mp: { url: unsafeUrl, pinnedCommit: 'f'.repeat(40) } },
+          plugins: {},
+        },
+      });
+
+      const engine = loadEngine(claudeHome);
+      const { calls, runPlugin } = makeSpy();
+
+      const result = engine.reverseMigrateMarketplace('mp', { runPlugin });
+
+      assert.deepEqual(result, { name: 'mp', status: 'invalid-origin-url' });
+      assert.deepEqual(calls, [], `CLI must not be touched for unsafe url: ${unsafeUrl}`);
+    }
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('reverseMigrateMarketplace: falls back to known_marketplaces.json source url when there is no lock', () => {
   const root = mkTmpDir('claude-sync-reverse-');
   try {
