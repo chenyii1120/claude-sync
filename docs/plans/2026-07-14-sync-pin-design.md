@@ -77,10 +77,14 @@
 新增 engine 函式 `exportPluginLock()`，在 `exportAll()` 內、`exportPluginConfigs()` 之後呼叫：
 
 1. 讀 `settings.json` 的 `enabledPlugins` → 得出要鎖的 plugin 集合。
-2. 對每個 plugin 解析其 marketplace → 找到該 marketplace 的本機 clone
-   （優先 `pinned-marketplaces/<name>`，否則 `known_marketplaces.json` 的 `installLocation`）。
-3. `git -C <clone> rev-parse HEAD` 取得 commit → 寫入 lockfile。
-4. 取不到 commit（目錄不存在 / 不是 git repo）→ 該 plugin 記入 `unlockable` 清單，
+   **全自動、零手動列舉**：所有啟用中的 plugin 一律入鎖，語意同 `package-lock.json` 的整包快照。
+2. 每個 plugin 的 commit 來源（優先序）：
+   a. `installed_plugins.json` 該 plugin 條目的 **`gitCommitSha`**（CLI 在安裝當下記錄的
+      marketplace commit——這是「實際裝進去的版本」，即使 marketplace clone 後來被 update 也不受影響）；
+   b. 退而求其次：該 marketplace 本機 clone 的 `git rev-parse HEAD`
+      （優先 `pinned-marketplaces/<name>`，否則 `known_marketplaces.json` 的 `installLocation`）。
+3. 將 commit 寫入 lockfile。
+4. 兩個來源都取不到 → 該 plugin 記入 `unlockable` 清單，
    push 結果回報警告，**不阻擋 push**（該 plugin 維持今日的「裝 HEAD」行為）。
 
 語意：**push 的機器說了算**。你在體驗好的那台 push，鎖到的就是那台的體驗；
