@@ -156,10 +156,18 @@ github-source 跟著 HEAD 走的機器 push 時，鎖到的就是它當下的 HE
 - **知情同意**：
   - `/sync-init` 流程中以 AskUserQuestion 詢問「要啟用 plugin 版本鎖定嗎？（預設：是）」，
     把答案寫入 config，讓使用者第一天就知道這個行為存在。
-  - 既有安裝（config 內尚無 `pinPlugins` 欄位）在**首次 push** 時同樣詢問一次並寫入 config，
-    之後不再打擾。
+  - 既有安裝（config 內尚無 `pinPlugins` 欄位）在**首次 push 或首次 pull**（先到者）
+    時同樣詢問一次並寫入 config，之後不再打擾。首次 pull 的詢問時機在套用 lock 之前：
+    選「是」→ 走 §6 的 preview/apply；選「否」→ 忽略 lock，缺件補裝走現行
+    `claude plugin install`（= 上游 HEAD 最新版）。
   - README 必須有專節說明：預設鎖定、行為是什麼、以及不想鎖定時改
     `config.json` 的 `pinPlugins: false` 即可（見 §11 Phase 1A 交付項）。
+- **解除 pin（`pinPlugins` 由 true 改 false）的語意**：必須避免「殭屍 pin」——
+  path-source 受管 clone 不會自行更新，若只忽略 lock，plugin 會永遠停在最後 checkout 的版本。
+  因此偵測到「pinPlugins=false 但存在 claude-sync 受管的 pinned marketplace」時，
+  提示使用者並執行**反向遷移**：`marketplace remove` → 以原 `url` 重新
+  `marketplace add`（回到 github-source，CLI 恢復追蹤 HEAD）→ 重裝該 marketplace 下
+  已啟用 plugin（裝到最新版）。從未 pin 過的機器選 false 則零動作、維持現行為。
 
 ## 10. 實作前必驗證清單（V-*）
 
