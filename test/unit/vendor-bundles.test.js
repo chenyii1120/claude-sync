@@ -191,6 +191,28 @@ test('exportPluginVendorBundles: prunes the bundle dir for a marketplace removed
   }
 });
 
+test('exportPluginVendorBundles: prunes a leftover bundle dir even when vendorMarketplaces is emptied entirely', () => {
+  const root = mkTmpDir('claude-sync-vendor-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const engine = loadEngine(claudeHome);
+    // The LAST vendored marketplace was just turned off -- the list is now
+    // empty, but its old bundle dir is still on disk from a prior push.
+    seedHome(claudeHome, { vendorMarketplaces: [] });
+
+    const oldDir = vendorDir(claudeHome, 'oldmp');
+    fs.mkdirSync(oldDir, { recursive: true });
+    fs.writeFileSync(path.join(oldDir, `${'f'.repeat(40)}.bundle`), 'stale');
+
+    const result = engine.exportPluginVendorBundles();
+
+    assert.equal(fs.existsSync(oldDir), false, 'leftover bundle dir must be pruned even with an empty vendorMarketplaces list');
+    assert.deepEqual(result, { vendored: [], skipped: [] });
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('exportPluginVendorBundles: empty config.vendorMarketplaces is a no-op', () => {
   const root = mkTmpDir('claude-sync-vendor-');
   try {
