@@ -42,6 +42,23 @@ Help the user initialize claude-sync. Follow these steps:
    - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
    - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
+5a. **Ask about plugin version pinning.** Init is the natural first-time moment for this, so ask unconditionally (no need to check whether it was already decided). Use **AskUserQuestion**:
+
+   > 是否要鎖定已啟用插件的版本（pinPlugins）？啟用後，`/sync-push` 會把每個已啟用插件目前安裝的 git commit 記錄進 `plugins.lock.json`，讓其他機器可以重現相同版本，而不是隨 marketplace 最新版飄移。
+   >
+   > - **啟用（預設）/ Enable (default)** — 記錄插件版本，供其他機器重現。
+   > - **不啟用 / Disable** — 不記錄、不套用插件鎖定；插件安裝該 marketplace 的最新版本。
+
+   Persist the answer:
+   ```bash
+   # Enable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(true);"
+   # Disable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(false);"
+   ```
+
+   Tell the user they can change this later by editing `pinPlugins` in `~/.claude/sync/config.json`.
+
 6. **Detect unknown sync dirs.** The default sync set covers `commands/`, `rules/`, `agents/`, `skills/`, `hooks/`. Anything else under `~/.claude/` (e.g. `homunculus/`, custom MCP scripts referenced by hooks) needs explicit user opt-in. Run:
 
    ```bash

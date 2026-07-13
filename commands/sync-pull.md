@@ -15,6 +15,34 @@ these steps exactly and in order.
 
 1. **Check initialized.** If not, tell the user to run `/sync-init` first and stop.
 
+1a. **Plugin version pinning consent (first pull only).** Check whether the user has already decided:
+
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsDecided());"
+   ```
+
+   If `false`, use **AskUserQuestion** to ask:
+
+   > 是否要鎖定已啟用插件的版本（pinPlugins）？啟用後，`/sync-push` 會把每個已啟用插件目前安裝的 git commit 記錄進 `plugins.lock.json`，讓其他機器可以重現相同版本，而不是隨 marketplace 最新版飄移。
+   >
+   > - **啟用（預設）/ Enable (default)** — 記錄插件版本，供其他機器重現。
+   > - **不啟用 / Disable** — 不記錄、不套用插件鎖定；插件安裝該 marketplace 的最新版本。
+
+   Persist the answer:
+   ```bash
+   # Enable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(true);"
+   # Disable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(false);"
+   ```
+   If `pinPluginsDecided()` was already `true`, skip this step silently — do not ask again.
+
+   Note for either choice: in Phase 1A, `/sync-pull` does **not** yet apply the plugin
+   lock — this only records the user's preference. If they chose Disable, that's
+   respected (nothing will be locked or applied). If they chose Enable, a future phase
+   will offer to reproduce the locked versions on pull; for now nothing changes about
+   what this pull does.
+
 2. **Preview the pull** to determine the safest mode:
 
    ```bash

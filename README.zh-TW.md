@@ -362,6 +362,18 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ---
 
+## 🔒 Plugin 版本鎖定
+
+當你執行 push 時，claude-sync 會把每個已啟用插件目前的確切版本（git commit）記錄到同步 repo 的 `global/plugins.lock.json`。其他機器接著可以重現這些確切版本，而不是隨 marketplace 目前的 `HEAD` 飄移。
+
+此功能**預設啟用（opt-out）**。你只會被詢問一次 —— 在 `/sync-init`、第一次 `/sync-push`、或第一次 `/sync-pull` 之中最先發生的那個時機 —— 之後就會記住你的選擇。
+
+若要停用，可以在 `~/.claude/sync/config.json` 中設定 `"pinPlugins": false`，或在被詢問時選擇「不啟用」。停用後，`/sync-push` 不會記錄任何鎖定，插件會照舊安裝該 marketplace 的最新版本。
+
+> **Phase 1A 範圍：** 這個階段只負責記錄鎖定，並透過 `/sync-status` 顯示版本飄移。真正在 `/sync-pull` 時跨機器套用鎖定版本，會在之後的階段實作。
+
+---
+
 ## ⚡ 衝突解決
 
 使用 **JSON 欄位層級的 3-way merge**：

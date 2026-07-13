@@ -364,6 +364,18 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ---
 
+## 🔒 Plugin Version Locking
+
+When you push, claude-sync records the exact version (git commit) of every enabled plugin into `global/plugins.lock.json` in your sync repo. Other machines can then reproduce those exact plugin versions instead of drifting to whatever the marketplace's current `HEAD` happens to be.
+
+This is **on by default (opt-out)**. You're asked once — at whichever of `/sync-init`, your first `/sync-push`, or your first `/sync-pull` happens first — and the choice is remembered after that.
+
+To disable it, set `"pinPlugins": false` in `~/.claude/sync/config.json`, or choose "Disable" when asked. When disabled, `/sync-push` records no lock, and plugins install at their marketplace's latest version as before.
+
+> **Phase 1A scope:** this phase records the lock and surfaces drift via `/sync-status`. Actually applying the pinned versions across machines during `/sync-pull` arrives in a later phase.
+
+---
+
 ## ⚡ Conflict Resolution
 
 Uses **JSON field-level 3-way merge**:
