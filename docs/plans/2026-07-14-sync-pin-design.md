@@ -150,8 +150,16 @@ github-source 跟著 HEAD 走的機器 push 時，鎖到的就是它當下的 HE
   但版本真相以 lockfile 為準；文件註明兩者衝突時 lockfile 贏。
 - **安全**：clone URL 必過既有 `validateRemoteUrl`；lockfile 進 smart-merge 的 JSON 欄位合併
   （`MERGE_JSON_FILES` 加入 `global/plugins.lock.json`），衝突時遵循現有 merge 語意（遠端贏 + 備份）。
-- **opt-in**：`config.json` 增 `pinPlugins: true`（per-machine）。未開啟的機器：push 不寫 lock、
-  pull 忽略 lock（並提示「remote 有 lockfile，可用 /sync-pin 啟用」）。
+- **預設開啟（opt-out）**：`config.json` 的 `pinPlugins` **預設為 `true`**。
+  設為 `false` 的機器：push 不寫 lock、pull 忽略 lock（並提示「remote 有 lockfile，
+  可在 config 開啟 pinPlugins 以啟用」）。
+- **知情同意**：
+  - `/sync-init` 流程中以 AskUserQuestion 詢問「要啟用 plugin 版本鎖定嗎？（預設：是）」，
+    把答案寫入 config，讓使用者第一天就知道這個行為存在。
+  - 既有安裝（config 內尚無 `pinPlugins` 欄位）在**首次 push** 時同樣詢問一次並寫入 config，
+    之後不再打擾。
+  - README 必須有專節說明：預設鎖定、行為是什麼、以及不想鎖定時改
+    `config.json` 的 `pinPlugins: false` 即可（見 §11 Phase 1A 交付項）。
 
 ## 10. 實作前必驗證清單（V-*）
 
@@ -164,8 +172,14 @@ github-source 跟著 HEAD 走的機器 push 時，鎖到的就是它當下的 HE
 
 ## 11. 分階段實作（每階段獨立完成 + 測試後才進下一階段）
 
-- **Phase 1A — 記錄（無行為變更）**：`exportPluginLock()` + push 時寫 lockfile；
-  `/sync-status` 顯示 drift 表。純新增，零風險。單元測試：lockfile 產出、path transform、缺 clone 的 unlockable 警告。
+- **Phase 1A — 記錄（無行為變更）**：`exportPluginLock()` + push 時寫 lockfile
+  （`pinPlugins` 預設 `true`，見 §9）；`/sync-status` 顯示 drift 表。
+  交付項含知情同意與文件：
+  - `/sync-init` 與首次 push 的 AskUserQuestion 詢問（答案寫入 config）。
+  - README.md 與 README.zh-TW.md 新增「Plugin 版本鎖定」專節：預設開啟、
+    行為說明、不想鎖定改 `config.json` 的 `pinPlugins: false`。
+  純新增，零風險。單元測試：lockfile 產出、path transform、缺 clone 的 unlockable 警告、
+  `pinPlugins: false` 時不寫 lock。
 - **Phase 1B — 套用**：V-1〜V-4 實測 → `previewPluginLock()` / `applyPluginLock()` +
   sync-pull.md 的確認流程。測試：checkout/fetch/unreproducible 各分支、確認流程的 apply/skip。
 - **Phase 1C — 遷移**：`migrateMarketplaceToPinned()` + `/sync-pin` command。
