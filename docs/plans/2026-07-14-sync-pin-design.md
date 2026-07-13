@@ -178,6 +178,46 @@ github-source 跟著 HEAD 走的機器 push 時，鎖到的就是它當下的 HE
 | V-3 | 已安裝不同版本時 `plugin install` 會原地換版還是需先 uninstall？ | 決定 §6 步驟 5 的實作 |
 | V-4 | enable/disable 狀態在 reinstall 後是否保留？ | 需在 reinstall 前後快照/回填 enabledPlugins |
 
+### 10.1 V-* 實測結果（2026-07-14，隔離沙箱 `CLAUDE_CONFIG_DIR`，真實 `~/.claude` 全程未動）
+
+用 `CLAUDE_CONFIG_DIR=<tmp>` 把整個 `claude plugin` CLI 導向沙箱，配一個本地 git fixture
+marketplace（`vfix`，plugin `vplug`，commit C1=0.0.1 / C2=0.0.2）實測：
+
+- **V-1（confirmed 不利）**：`claude plugin marketplace remove <name>` **會**連帶
+  uninstall 其下所有 plugin，並把它們從 `settings.json` 的 `enabledPlugins` 移除
+  （實測 `installed_plugins.json` → 空、`enabledPlugins` → `{}`）。
+  → 遷移（§7）與反向遷移（§9 unpin）**必須先快照** enabled 集合，remove 後
+  重新 install 並補回 enable/disable 狀態。
+- **V-2（confirmed 有利）**：同名 marketplace 以 path 重新 add 後，`plugin@marketplace`
+  id 沿用（marketplace 名來自 marketplace.json 的 `name`，同內容→同名→同 id），
+  `enabledPlugins` 不需改寫。但 re-add **不會**自動 reinstall，需顯式 `install`。
+- **V-3（confirmed 需 uninstall+install）**：`claude plugin install <id>` 對「已安裝的
+  id」是**冪等且不換版**的（即使 catalog 已刷新到新版，仍回報 already installed、
+  版本不變）。可靠換版流程：
+  1. `git checkout --detach <pinnedCommit>`（在受管 clone 內）；
+  2. `claude plugin marketplace update <name>` 刷新 CLI catalog 到 pinned 版本——
+     **對 path/Directory source 安全**：實測 HEAD 不被移動（訊息為 "Validating local
+     marketplace"），只重掃本地目錄；
+  3. `claude plugin uninstall <id>` + `claude plugin install <id>` → 換到 checked-out
+     版本（實測 0.0.1→0.0.2）。`claude plugin update <id>` 亦可，且被 pin 邊界限制到
+     checked-out 版本（path source 無遠端，不會漂到上游 HEAD）。
+- **V-4（confirmed 不利）**：enable/disable 狀態**不跨 reinstall 保留**——`install` /
+  `update` 都會把 plugin 翻回 enabled（實測 disable 後 install → `enabledPlugins` 該項
+  由 `false` 變 `true`）。→ apply/遷移必須快照 `enabledPlugins`，reinstall 後對原本
+  disabled 的項目補跑 `claude plugin disable`。
+
+**由 V-* 推導的兩項設計修正：**
+
+1. **§4/§8 更正**：原文「絕不對受管 clone 執行 `marketplace update`」僅適用 **github
+   source**（update = git pull → 漂到遠端 HEAD）。對 claude-sync 受管的 **path-source
+   clone**，`marketplace update` 只重掃本地目錄、**不動 git checkout**，而且是「checkout
+   換版後刷新 CLI catalog」的必要步驟。危險操作實為「對 clone 跑 `git pull`/`fetch` 後把
+   HEAD 帶走」——那由 claude-sync 全權控制、絕不執行。
+2. **CLI 隔離架構決策**：`applyPluginLock()`（及遷移）shell out `claude plugin` 子行程時，
+   一律設環境變數 `CLAUDE_CONFIG_DIR = CLAUDE_HOME`。production 下兩者同為 `~/.claude`
+   （行為正確）；測試下 `CLAUDE_HOME` 是 tmp、子行程也就完全隔離，integration test 不觸碰
+   真實 `~/.claude`（已用此法完成 V-1〜V-4）。這也是 §6 步驟 5 reinstall 的實作基礎。
+
 ## 11. 分階段實作（每階段獨立完成 + 測試後才進下一階段）
 
 - **Phase 1A — 記錄（無行為變更）**：`exportPluginLock()` + push 時寫 lockfile
