@@ -372,7 +372,7 @@ This is **on by default (opt-out)**. You're asked once — at whichever of `/syn
 
 To disable it, set `"pinPlugins": false` in `~/.claude/sync/config.json`, or choose "Disable" when asked. When disabled, `/sync-push` records no lock, and plugins install at their marketplace's latest version as before.
 
-> **Phase 1A scope:** this phase records the lock and surfaces drift via `/sync-status`. Actually applying the pinned versions across machines during `/sync-pull` arrives in a later phase.
+> **How it applies:** `/sync-status` (and `/sync-pin status`) show drift between the lock and what's actually installed. On `/sync-pull`, after you confirm per marketplace, the locked versions are reproduced — each marketplace is cloned at its pinned commit (registered as a local path-source marketplace) and its plugins reinstalled at that commit. Use `/sync-pin set <marketplace> <ref>` to move a pin to a specific tag/branch/commit, then `/sync-push` to record it for other machines.
 
 ### Vendor fallback
 

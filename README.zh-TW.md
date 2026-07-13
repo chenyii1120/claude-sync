@@ -370,7 +370,7 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 若要停用，可以在 `~/.claude/sync/config.json` 中設定 `"pinPlugins": false`，或在被詢問時選擇「不啟用」。停用後，`/sync-push` 不會記錄任何鎖定，插件會照舊安裝該 marketplace 的最新版本。
 
-> **Phase 1A 範圍：** 這個階段只負責記錄鎖定，並透過 `/sync-status` 顯示版本飄移。真正在 `/sync-pull` 時跨機器套用鎖定版本，會在之後的階段實作。
+> **如何套用：** `/sync-status`（與 `/sync-pin status`）會顯示 lock 與實際安裝之間的版本飄移。執行 `/sync-pull` 時，經你逐 marketplace 確認後，就會重現鎖定的版本——每個 marketplace 會在其 pin 住的 commit 上被 clone（註冊為本機 path-source marketplace），其插件也重裝到該 commit。用 `/sync-pin set <marketplace> <ref>` 可把 pin 移到特定 tag/branch/commit，再 `/sync-push` 讓其他機器跟上。
 
 ### Vendor 備援
 
