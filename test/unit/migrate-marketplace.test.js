@@ -255,6 +255,7 @@ test('reverseMigrateMarketplace: happy path re-adds the original github url and 
       status: 'unpinned',
       reinstalled: ['foo@mp'],
       disabled: [],
+      failed: [],
     });
     // The managed clone dir is removed so it can't be silently re-registered.
     assert.ok(!fs.existsSync(managedCloneDir));
@@ -342,6 +343,59 @@ test('reverseMigrateMarketplace: falls back to known_marketplaces.json source ur
       'marketplace update mp',
     ]);
     assert.equal(result.status, 'unpinned');
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('reverseMigrateMarketplace: a failing install does not abort the reinstall loop, the disable step, or the clone cleanup', () => {
+  const root = mkTmpDir('claude-sync-reverse-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commitX = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const managedCloneDir = path.join(claudeHome, 'sync', 'pinned-marketplaces', 'mp');
+    fs.mkdirSync(managedCloneDir, { recursive: true });
+    fs.writeFileSync(path.join(managedCloneDir, 'marker.txt'), 'managed clone');
+
+    seedHome(claudeHome, {
+      enabledPlugins: { 'foo@mp': true, 'x@mp': false },
+      installedPlugins: {
+        'foo@mp': [{ version: '1.0.0', gitCommitSha: commitX }],
+        'x@mp': [{ version: '1.0.0', gitCommitSha: commitX }],
+      },
+      knownMarketplaces: { mp: { installLocation: managedCloneDir } },
+      lock: {
+        version: 1,
+        marketplaces: { mp: { url: sourceDir, pinnedCommit: commitX } },
+        plugins: {
+          'foo@mp': { marketplace: 'mp', version: '1.0.0' },
+          'x@mp': { marketplace: 'mp', version: '1.0.0' },
+        },
+      },
+    });
+
+    const engine = loadEngine(claudeHome);
+    const calls = [];
+    const runPlugin = (args) => {
+      const argv = args.join(' ');
+      calls.push(argv);
+      if (argv === 'install foo@mp') throw new Error('not available at latest');
+      return '';
+    };
+
+    const result = engine.reverseMigrateMarketplace('mp', { runPlugin });
+
+    // The failing install must not stop the OTHER install, nor the disable
+    // re-apply loop, nor the managed clone dir cleanup that both come after.
+    assert.ok(calls.includes('install x@mp'));
+    assert.ok(calls.includes('disable x@mp'));
+    assert.deepEqual(result.failed, [{ id: 'foo@mp', error: 'not available at latest' }]);
+    assert.equal(result.status, 'unpinned');
+    assert.deepEqual(result.disabled, ['x@mp']);
+    assert.ok(!fs.existsSync(managedCloneDir), 'managed clone dir must still be removed despite the install failure');
   } finally {
     rmDir(root);
   }
