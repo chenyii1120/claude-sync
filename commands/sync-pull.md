@@ -54,11 +54,10 @@ these steps exactly and in order.
 
    If `pinPluginsDecided()` was already `true`, skip this step silently — do not ask again.
 
-   Note for either choice: in Phase 1A, `/sync-pull` does **not** yet apply the plugin
-   lock — this only records the user's preference. If they chose Disable, that's
-   respected (nothing will be locked or applied). If they chose Enable, a future phase
-   will offer to reproduce the locked versions on pull; for now nothing changes about
-   what this pull does.
+   Note for either choice: this step only records the user's preference. If they chose
+   Disable, that's respected (nothing will be locked or applied). If they chose Enable,
+   step 10 below applies the plugin lock later in this same pull, with per-marketplace
+   confirmation.
 
 2. **Preview the pull** to determine the safest mode:
 

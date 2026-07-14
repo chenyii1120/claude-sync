@@ -340,6 +340,52 @@ test('exportPluginLock: preserves the original upstream url when re-pushing from
   }
 });
 
+test('exportPluginLock: a marketplace re-added from a NEW github source overrides a stale url in the existing lock', () => {
+  const root = mkTmpDir('claude-sync-export-lock-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    fs.mkdirSync(claudeHome, { recursive: true });
+
+    seedPluginHome(claudeHome, {
+      enabledPlugins: { 'foo@mp': true },
+      installedPlugins: {
+        'foo@mp': [{ scope: 'user', version: '1.0.0', gitCommitSha: 'a'.repeat(40) }],
+      },
+      knownMarketplaces: {
+        // The marketplace legitimately moved: it's a CURRENT github source
+        // with a url different from what the old lock recorded.
+        mp: { source: { source: 'github', repo: 'someone/new-mp' } },
+      },
+    });
+
+    // Existing committed lock still has the OLD (stale) url.
+    const globalDir = path.join(claudeHome, 'sync', 'repo', 'global');
+    fs.mkdirSync(globalDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalDir, 'plugins.lock.json'),
+      JSON.stringify({
+        version: 1,
+        generatedAt: '2020-01-01T00:00:00.000Z',
+        generatedBy: 'other-machine',
+        marketplaces: { mp: { url: 'https://github.com/someone/old-mp.git', pinnedCommit: 'a'.repeat(40) } },
+        plugins: { 'foo@mp': { marketplace: 'mp', version: '1.0.0' } },
+      }, null, 2),
+    );
+
+    const engine = loadEngine(claudeHome);
+    engine.exportPluginLock();
+
+    const lock = readLock(claudeHome);
+    assert.equal(
+      lock.marketplaces.mp.url,
+      'https://github.com/someone/new-mp.git',
+      'a current github source must win over a stale previously-committed url, allowing legitimate moves',
+    );
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('exportPluginLock: falls back to the pinned clone origin url when no existing lock and source is not github', () => {
   const root = mkTmpDir('claude-sync-export-lock-');
   try {

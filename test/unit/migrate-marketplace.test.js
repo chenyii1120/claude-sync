@@ -116,6 +116,7 @@ test('migrateMarketplaceToPinned: happy path pins the marketplace at its install
       commit: commitX,
       reinstalled: ['foo@mp'],
       disabled: [],
+      failed: [],
     });
     // The pinned clone was actually created and checked out at commitX.
     assert.ok(fs.existsSync(expectedCloneDir));

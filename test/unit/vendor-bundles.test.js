@@ -251,6 +251,115 @@ test('exportPluginVendorBundles: no local source has the pinned commit -> skippe
   }
 });
 
+test('exportPluginVendorBundles: neutralizes a symlinked per-marketplace vendor dir instead of writing through it', () => {
+  const root = mkTmpDir('claude-sync-vendor-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commitX = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const engine = loadEngine(claudeHome);
+    seedHome(claudeHome, {
+      vendorMarketplaces: ['mp'],
+      lock: { version: 1, marketplaces: { mp: { url: sourceDir, pinnedCommit: commitX } }, plugins: {} },
+    });
+    const cloneRoot = path.join(claudeHome, 'sync', 'pinned-marketplaces');
+    engine.preparePinnedClone('mp', sourceDir, commitX, { cloneRoot });
+
+    // Attacker-controlled synced repo plants global/plugin-vendor/mp as a
+    // symlink pointing OUTSIDE the repo -- materialized by e.g. reset --hard.
+    const externalTarget = path.join(root, 'external-target');
+    fs.mkdirSync(externalTarget, { recursive: true });
+    const mpDir = vendorDir(claudeHome, 'mp');
+    fs.mkdirSync(path.dirname(mpDir), { recursive: true });
+    fs.symlinkSync(externalTarget, mpDir);
+
+    const result = engine.exportPluginVendorBundles();
+
+    assert.deepEqual(result, { vendored: [{ name: 'mp', commit: commitX, status: 'vendored' }], skipped: [] });
+
+    // The symlink was neutralized -- the bundle lives in a REAL directory at
+    // the conventional path, and the external target received nothing.
+    assert.equal(fs.lstatSync(mpDir).isSymbolicLink(), false, 'plugin-vendor/mp must be a real dir, not the planted symlink');
+    const bundleFile = path.join(mpDir, `${commitX}.bundle`);
+    assert.ok(fs.existsSync(bundleFile), 'real plugin-vendor/mp/<commit>.bundle should exist');
+    assert.deepEqual(fs.readdirSync(externalTarget), [], 'the external symlink target must not receive the bundle');
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('exportPluginVendorBundles: neutralizes a symlinked plugin-vendor ROOT before writing under it', () => {
+  const root = mkTmpDir('claude-sync-vendor-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commitX = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const engine = loadEngine(claudeHome);
+    seedHome(claudeHome, {
+      vendorMarketplaces: ['mp'],
+      lock: { version: 1, marketplaces: { mp: { url: sourceDir, pinnedCommit: commitX } }, plugins: {} },
+    });
+    const cloneRoot = path.join(claudeHome, 'sync', 'pinned-marketplaces');
+    engine.preparePinnedClone('mp', sourceDir, commitX, { cloneRoot });
+
+    // Attacker plants the plugin-vendor ROOT itself as a symlink.
+    const externalTarget = path.join(root, 'external-root-target');
+    fs.mkdirSync(externalTarget, { recursive: true });
+    const rootDir = path.join(claudeHome, 'sync', 'repo', 'global', 'plugin-vendor');
+    fs.mkdirSync(path.dirname(rootDir), { recursive: true });
+    fs.symlinkSync(externalTarget, rootDir);
+
+    const result = engine.exportPluginVendorBundles();
+
+    assert.deepEqual(result, { vendored: [{ name: 'mp', commit: commitX, status: 'vendored' }], skipped: [] });
+    assert.equal(fs.lstatSync(rootDir).isSymbolicLink(), false, 'plugin-vendor root must be a real dir, not the planted symlink');
+    const bundleFile = path.join(rootDir, 'mp', `${commitX}.bundle`);
+    assert.ok(fs.existsSync(bundleFile));
+    assert.deepEqual(fs.readdirSync(externalTarget), [], 'the external symlink target must not receive the bundle tree');
+  } finally {
+    rmDir(root);
+  }
+});
+
+test('exportPluginVendorBundles: prune removes a symlinked stale marketplace dir without recursing through it', () => {
+  const root = mkTmpDir('claude-sync-vendor-');
+  try {
+    const claudeHome = path.join(root, 'claude-home');
+    const sourceDir = makeSourceRepo(path.join(root, 'source'));
+    writeAndCommit(sourceDir, 'file.txt', 'hello', 'first commit');
+    const commitX = git(sourceDir, ['rev-parse', 'HEAD']);
+
+    const engine = loadEngine(claudeHome);
+    seedHome(claudeHome, {
+      // 'oldmp' is no longer vendored -- only 'mp' is.
+      vendorMarketplaces: ['mp'],
+      lock: { version: 1, marketplaces: { mp: { url: sourceDir, pinnedCommit: commitX } }, plugins: {} },
+    });
+    const cloneRoot = path.join(claudeHome, 'sync', 'pinned-marketplaces');
+    engine.preparePinnedClone('mp', sourceDir, commitX, { cloneRoot });
+
+    // Stale 'oldmp' entry is a SYMLINK to an external dir with real content.
+    const externalTarget = path.join(root, 'external-oldmp-target');
+    fs.mkdirSync(externalTarget, { recursive: true });
+    fs.writeFileSync(path.join(externalTarget, 'keepme.txt'), 'do not delete me');
+    const oldDir = vendorDir(claudeHome, 'oldmp');
+    fs.mkdirSync(path.dirname(oldDir), { recursive: true });
+    fs.symlinkSync(externalTarget, oldDir);
+
+    engine.exportPluginVendorBundles();
+
+    assert.equal(fs.existsSync(oldDir), false, 'the symlink entry itself must be gone');
+    assert.ok(fs.existsSync(externalTarget), 'the external target directory must survive');
+    assert.ok(fs.existsSync(path.join(externalTarget, 'keepme.txt')), 'the external target contents must be untouched, not recursed into and deleted');
+  } finally {
+    rmDir(root);
+  }
+});
+
 test('exportAll: still returns an object containing unlockable (regression)', () => {
   const root = mkTmpDir('claude-sync-vendor-');
   try {
