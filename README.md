@@ -364,6 +364,24 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ---
 
+## 🔒 Plugin Version Locking
+
+When you push, claude-sync records the exact version (git commit) of every enabled plugin into `global/plugins.lock.json` in your sync repo. Other machines can then reproduce those exact plugin versions instead of drifting to whatever the marketplace's current `HEAD` happens to be.
+
+This is **on by default (opt-out)**. You're asked once — at whichever of `/sync-init`, your first `/sync-push`, or your first `/sync-pull` happens first — and the choice is remembered after that.
+
+To disable it, set `"pinPlugins": false` in `~/.claude/sync/config.json`, or choose "Disable" when asked. When disabled, `/sync-push` records no lock, and plugins install at their marketplace's latest version as before.
+
+> **How it applies:** `/sync-status` (and `/sync-pin status`) show drift between the lock and what's actually installed. On `/sync-pull`, after you confirm per marketplace, the locked versions are reproduced — each marketplace is cloned at its pinned commit (registered as a local path-source marketplace) and its plugins reinstalled at that commit. Use `/sync-pin set <marketplace> <ref>` to move a pin to a specific tag/branch/commit, then `/sync-push` to record it for other machines.
+
+### Vendor fallback
+
+Normally a pinned version is reproduced by cloning the marketplace's upstream repo at the pinned commit. If that upstream later rewrites history and deletes the commit, the pin becomes "unreproducible" and can't be restored from origin anymore.
+
+For marketplaces you can't afford to lose, enable vendoring with `/sync-pin vendor <marketplace>` (or add the name to `vendorMarketplaces` in `~/.claude/sync/config.json`). On push, claude-sync stores a self-contained `git bundle` of the pinned commit inside your sync repo; on pull, that bundle is used as a fallback so the exact version is restored even when upstream no longer has it.
+
+---
+
 ## ⚡ Conflict Resolution
 
 Uses **JSON field-level 3-way merge**:

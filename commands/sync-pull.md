@@ -15,6 +15,50 @@ these steps exactly and in order.
 
 1. **Check initialized.** If not, tell the user to run `/sync-init` first and stop.
 
+1a. **Plugin version pinning consent (first pull only).** Check whether the user has already decided:
+
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsDecided());"
+   ```
+
+   If `false`, use **AskUserQuestion** to ask:
+
+   > 是否要鎖定已啟用插件的版本（pinPlugins）？啟用後，`/sync-push` 會把每個已啟用插件目前安裝的 git commit 記錄進 `plugins.lock.json`，讓其他機器可以重現相同版本，而不是隨 marketplace 最新版飄移。
+   >
+   > - **啟用（預設）/ Enable (default)** — 記錄插件版本，供其他機器重現。
+   > - **不啟用 / Disable** — 不記錄、不套用插件鎖定；插件安裝該 marketplace 的最新版本。
+
+   Persist the answer:
+   ```bash
+   # Enable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(true);"
+   # Disable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(false);"
+   ```
+
+   **If the user chose Disable**, check whether this machine already has any
+   claude-sync-managed pinned marketplace, which would otherwise stay frozen at its
+   pinned commit forever with pinning off:
+   ```bash
+   node -e "const fs=require('fs'),p=require('path'),os=require('os'); const d=p.join(process.env.CLAUDE_CONFIG_DIR||p.join(os.homedir(),'.claude'),'sync','pinned-marketplaces'); console.log(JSON.stringify(fs.existsSync(d)?fs.readdirSync(d):[]));"
+   ```
+   If the array is non-empty, tell the user pinning is being turned off and use
+   **AskUserQuestion** to ask, for each managed marketplace listed, whether to unpin it
+   back to its original github source now (reinstalling at latest) or leave it as is.
+   For each the user chooses to unpin:
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.reverseMigrateMarketplace(process.argv[1]),null,2));" "<name>"
+   ```
+   If they leave one in place, tell them its plugins stay frozen at their pinned commit
+   until pinning is re-enabled or it's manually unpinned.
+
+   If `pinPluginsDecided()` was already `true`, skip this step silently — do not ask again.
+
+   Note for either choice: this step only records the user's preference. If they chose
+   Disable, that's respected (nothing will be locked or applied). If they chose Enable,
+   step 10 below applies the plugin lock later in this same pull, with per-marketplace
+   confirmation.
+
 2. **Preview the pull** to determine the safest mode:
 
    ```bash
@@ -222,3 +266,64 @@ these steps exactly and in order.
    If the user wants to keep local values for some fields:
    - Modify the local `~/.claude/settings.json` with the chosen values.
    - Tell the user: "Settings updated. Run /sync-push to push your choices to remote."
+
+10. **Apply pinned plugin versions (sync-pin).** After the pull (and any applies/reinstalls
+    above) are complete, check whether the just-pulled lock has drift against what's
+    installed locally.
+
+    **Gate:** skip this whole step silently if pinning is disabled:
+    ```bash
+    node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsEnabled());"
+    ```
+    If it prints `false`, stop here — do not compute drift, do not mention the lock.
+
+    **Compute drift** against the freshly-pulled commit:
+    ```bash
+    node -e "
+      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+      console.log(JSON.stringify(s.getPluginLockDrift('HEAD')));
+    "
+    ```
+    Keep only rows whose `action` is `reinstall` or `missing` — these are the ones an
+    apply would actually change. If there are none, say nothing further and finish the
+    flow.
+
+    **Present the drift** to the user as a table (plugin, current version, locked
+    version, action), grouped by marketplace (the substring of `plugin` after the
+    last `@`). Explain plainly that applying will reinstall those plugins at the exact
+    pinned commit the pushing machine recorded, and that this changes installed plugin
+    code — the same caution as the executable-dir confirmation in step 6.
+
+    **Ask which marketplaces to apply** with **AskUserQuestion** — a multiSelect
+    Apply/Skip per affected marketplace (a plain Apply/Skip is fine if only one
+    marketplace is affected). Marketplaces the user skips are left untouched and are
+    re-offered on a later pull.
+
+    **Apply the approved marketplaces:**
+    ```bash
+    node -e "
+      const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js');
+      console.log(JSON.stringify(s.applyPluginLock(JSON.parse(process.argv[1])), null, 2));
+    " '{"marketplaces":["<name1>","<name2>"]}'
+    ```
+    Replace the JSON argv with the actual approved marketplace names. If the user
+    approved none, skip this call entirely.
+
+    **Report results** from the returned object:
+    - `results[]` entries with `status:'applied'` — confirm the marketplace's plugins
+      were reproduced at the pinned `commit`, listing the `reinstalled` ids.
+    - If `unreproducible` is non-empty, the pinned commit no longer exists upstream
+      (history was rewritten on the machine that pushed it), AND no vendor bundle was
+      available to fall back on — the engine already tries the vendor bundle
+      automatically before giving up, so a marketplace only lands here when there is
+      also no bundle for it. Look up each affected marketplace's pinned commit from the
+      drift rows computed above (`lockedCommit`, grouped by marketplace) and warn the
+      user by name, then offer two options: (a) update the pin to a newer commit and
+      push from a machine that still has it, or (b) keep the currently installed
+      version for now — nothing was changed for that marketplace. Also mention that to
+      protect this marketplace against future upstream rewrites, they can enable
+      vendoring with `/sync-pin vendor <marketplace>` and re-push from a machine that
+      still has the commit, so the bundle is stored for next time.
+    - `results[]` entries with `status:'invalid-name'|'invalid-url'|'clone-failed'` —
+      report that the marketplace could not be prepared (its name or URL failed
+      validation, or the clone failed) and was skipped without touching any installs.

@@ -362,6 +362,24 @@ ${CLAUDE_HOME}/plugins/cache/superpowers/4.3.1
 
 ---
 
+## 🔒 Plugin 版本鎖定
+
+當你執行 push 時，claude-sync 會把每個已啟用插件目前的確切版本（git commit）記錄到同步 repo 的 `global/plugins.lock.json`。其他機器接著可以重現這些確切版本，而不是隨 marketplace 目前的 `HEAD` 飄移。
+
+此功能**預設啟用（opt-out）**。你只會被詢問一次 —— 在 `/sync-init`、第一次 `/sync-push`、或第一次 `/sync-pull` 之中最先發生的那個時機 —— 之後就會記住你的選擇。
+
+若要停用，可以在 `~/.claude/sync/config.json` 中設定 `"pinPlugins": false`，或在被詢問時選擇「不啟用」。停用後，`/sync-push` 不會記錄任何鎖定，插件會照舊安裝該 marketplace 的最新版本。
+
+> **如何套用：** `/sync-status`（與 `/sync-pin status`）會顯示 lock 與實際安裝之間的版本飄移。執行 `/sync-pull` 時，經你逐 marketplace 確認後，就會重現鎖定的版本——每個 marketplace 會在其 pin 住的 commit 上被 clone（註冊為本機 path-source marketplace），其插件也重裝到該 commit。用 `/sync-pin set <marketplace> <ref>` 可把 pin 移到特定 tag/branch/commit，再 `/sync-push` 讓其他機器跟上。
+
+### Vendor 備援
+
+一般情況下，pin 住的版本是透過 clone marketplace 的上游 repo、checkout 該 pin 住的 commit 來重現。若該上游之後改寫了歷史並刪除了那個 commit，這個 pin 就會變成「無法重現（unreproducible）」，再也無法從 origin 還原。
+
+對於你不能承受遺失的 marketplace，可以用 `/sync-pin vendor <marketplace>` 啟用 vendoring（或直接在 `~/.claude/sync/config.json` 的 `vendorMarketplaces` 加入該名稱）。push 時，claude-sync 會把 pin 住的 commit 打包成一個獨立的 `git bundle`，存進你的同步 repo；pull 時，若上游已經沒有該 commit，就會用這個 bundle 作為備援，還原出確切版本。
+
+---
+
 ## ⚡ 衝突解決
 
 使用 **JSON 欄位層級的 3-way merge**：

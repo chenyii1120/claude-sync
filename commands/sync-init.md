@@ -42,6 +42,45 @@ Help the user initialize claude-sync. Follow these steps:
    - If the repo was empty (`hasContent: false`): "Settings exported and pushed."
    - If the repo had data (`hasContent: true`): "Connected to existing sync repo." Then **immediately ask the user if they want to pull now.** If yes, run `/sync-pull` flow (show diff, confirm, pull, reinstall missing plugins). This avoids the user forgetting to pull and working with default settings.
 
+5a. **Ask about plugin version pinning (unless already decided).** Init is the natural first-time moment for this — but the `hasContent: true` path in step 5 may have already run the `/sync-pull` flow, which asks this same question and records the answer. So check first:
+
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(s.pinPluginsDecided());"
+   ```
+
+   If `true`, skip this step silently (do not ask again). If `false`, use **AskUserQuestion**:
+
+   > 是否要鎖定已啟用插件的版本（pinPlugins）？啟用後，`/sync-push` 會把每個已啟用插件目前安裝的 git commit 記錄進 `plugins.lock.json`，讓其他機器可以重現相同版本，而不是隨 marketplace 最新版飄移。
+   >
+   > - **啟用（預設）/ Enable (default)** — 記錄插件版本，供其他機器重現。
+   > - **不啟用 / Disable** — 不記錄、不套用插件鎖定；插件安裝該 marketplace 的最新版本。
+
+   Persist the answer:
+   ```bash
+   # Enable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(true);"
+   # Disable:
+   node -e "require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js').setPinPlugins(false);"
+   ```
+
+   **If the user chose Disable**, check whether this machine already has any
+   claude-sync-managed pinned marketplace, which would otherwise stay frozen at its
+   pinned commit forever with pinning off:
+   ```bash
+   node -e "const fs=require('fs'),p=require('path'),os=require('os'); const d=p.join(process.env.CLAUDE_CONFIG_DIR||p.join(os.homedir(),'.claude'),'sync','pinned-marketplaces'); console.log(JSON.stringify(fs.existsSync(d)?fs.readdirSync(d):[]));"
+   ```
+   If the array is non-empty, tell the user pinning is being turned off and use
+   **AskUserQuestion** to ask, for each managed marketplace listed, whether to unpin it
+   back to its original github source now (reinstalling at latest) or leave it as is.
+   For each the user chooses to unpin:
+   ```bash
+   node -e "const s = require('${CLAUDE_PLUGIN_ROOT}/lib/sync-engine.js'); console.log(JSON.stringify(s.reverseMigrateMarketplace(process.argv[1]),null,2));" "<name>"
+   ```
+   If they leave one in place, tell them its plugins stay frozen at their pinned commit
+   until pinning is re-enabled or it's manually unpinned.
+
+   Tell the user they can change this later by editing `pinPlugins` in `~/.claude/sync/config.json`.
+
 6. **Detect unknown sync dirs.** The default sync set covers `commands/`, `rules/`, `agents/`, `skills/`, `hooks/`. Anything else under `~/.claude/` (e.g. `homunculus/`, custom MCP scripts referenced by hooks) needs explicit user opt-in. Run:
 
    ```bash
